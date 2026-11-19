@@ -5,8 +5,6 @@ import { I18nProvider } from "@/lib/i18n";
 import { BackendProvider } from "@/lib/backend";
 import { usePathname, setParams } from "./stubs/next-navigation";
 import Landing from "@/app/page";
-import Login from "@/app/login/page";
-import Register from "@/app/register/page";
 import AppLayout from "@/app/app/layout";
 import Dashboard from "@/app/app/page";
 import NewProject from "@/app/app/new/page";
@@ -18,8 +16,6 @@ import Review from "@/app/review/[token]/page";
 type Route = { re: RegExp; keys: string[]; page: ComponentType; layout?: ComponentType<{ children: ReactNode }> };
 const routes: Route[] = [
   { re: /^\/$/, keys: [], page: Landing },
-  { re: /^\/login$/, keys: [], page: Login },
-  { re: /^\/register$/, keys: [], page: Register },
   { re: /^\/app$/, keys: [], page: Dashboard, layout: AppLayout },
   { re: /^\/app\/new$/, keys: [], page: NewProject, layout: AppLayout },
   { re: /^\/app\/settings$/, keys: [], page: Settings, layout: AppLayout },

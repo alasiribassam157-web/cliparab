@@ -58,7 +58,7 @@ downloader.download = fake_download
 
 with socket.socket() as s:
     s.bind(("127.0.0.1", 0)); port = s.getsockname()[1]
-settings = Settings(data_dir=work / "data", secret="live-test", rate_limit_per_min=100000, cors_origins=["*"])
+settings = Settings(data_dir=work / "data", rate_limit_per_min=100000, cors_origins=["*"])
 app = create_app(settings)
 threading.Thread(target=lambda: [worker.run_one(app.state.ctx.db, settings) or time.sleep(0.3) for _ in iter(int, 1)], daemon=True).start()
 server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))

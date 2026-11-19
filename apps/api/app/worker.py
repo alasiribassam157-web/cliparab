@@ -72,7 +72,6 @@ def fail(db: Db, job: dict, code: str, details: str | None = None) -> None:
     err = ApiError(code)
     db.run("UPDATE jobs SET status='error', error_code=?, error_message_ar=?, error_message_en=?, finished_at=? WHERE id=?",
            code, err.message_ar, err.message_en + (f" ({details})" if details else ""), now(), job["id"])
-    svc.refund_minutes(db, job["user_id"], job["credits_reserved"], job["id"])  # failed work is never charged
     if job["project_id"] and job["kind"] == "analyze":
         db.run("UPDATE projects SET status='ready', updated_at=? WHERE id=?", now(), job["project_id"])
     if job["kind"] == "export":

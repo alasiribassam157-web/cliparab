@@ -31,9 +31,11 @@ try {
   check("demo banner visible", await page.locator(".banner").isVisible());
   await shot("01-landing");
 
-  await page.getByRole("button", { name: "جرّب الآن بدون تسجيل" }).click();
+  check("landing has no login / sign-up links", (await page.locator('a[href="/login"], a[href="/register"]').count()) === 0 && !(await page.textContent("header")).includes("تسجيل"));
+  await page.getByRole("link", { name: "ابدأ الآن" }).first().click();
   await page.waitForURL("**/app");
-  check("dashboard shows empty state + credits", (await page.textContent("main")).includes("لا توجد مشاريع بعد") && (await page.textContent("header")).includes("120"));
+  const head = await page.textContent("header");
+  check("dashboard shows empty state, no plan / minutes / logout", (await page.textContent("main")).includes("لا توجد مشاريع بعد") && !/دقيقة|الخطة|خروج|دخول/.test(head + (await page.textContent("main"))));
   await shot("02-dashboard-empty");
 
   await page.getByRole("link", { name: "مشروع جديد" }).first().click();
@@ -46,7 +48,6 @@ try {
   await page.waitForSelector('[data-testid="clip-card"]', { timeout: 30000 });
   const cards = await page.locator('[data-testid="clip-card"]').count();
   check("suggestions listed (>=3)", cards >= 3, `count=${cards}`);
-  check("minutes were deducted", !(await page.textContent("header")).includes("120 "));
   await page.getByRole("button", { name: "لماذا هذا المقطع؟" }).first().click();
   check("score breakdown shows 6 bars", (await page.locator(".bar").count()) === 6);
   await shot("04-suggestions");

@@ -13,30 +13,30 @@ from conftest import Server, make_project
 from app import services as svc
 
 
-# ------------------------------------------------------------------ auth + error shape
-def test_register_login_me_and_error_shape(server):
+# ------------------------------------------------------------------ anonymous identity + error shape
+def test_anonymous_identity_and_error_shape(server):
     c = server.signup()
     me = c.get("/v1/me").json()
-    assert me["email"] == "a@example.com" and me["plan"] == "free" and me["minutes_remaining"] == 120
-    assert me["allow_training"] is False and me["watermark"] is False        # privacy default, no watermark on free
-    dup = requests.post(server.base + "/v1/auth/register", json={"email": "A@example.com", "password": "another-pass-1"})
-    assert dup.status_code == 409 and dup.json()["error"]["code"] == "EMAIL_TAKEN"
-    bad = requests.post(server.base + "/v1/auth/login", json={"email": "a@example.com", "password": "nope-nope-1"})
-    assert bad.status_code == 401
-    err = bad.json()["error"]
-    assert set(err) == {"code", "message_ar", "message_en", "details", "request_id"} and "كلمة المرور" in err["message_ar"]
-    assert bad.headers["X-Request-ID"] == err["request_id"]
-    ok = requests.post(server.base + "/v1/auth/login", json={"email": "a@example.com", "password": "correct-horse-1"})
-    assert ok.status_code == 200 and ok.json()["token"]
-    assert requests.get(server.base + "/v1/me").status_code == 401
-    v = requests.post(server.base + "/v1/auth/register", json={"email": "x", "password": "short"})
+    assert me["allow_training"] is False and me["locale"] == "ar"                      # privacy default
+    assert set(me) == {"id", "locale", "allow_training", "created_at"}                  # no email / plan / minutes / quota fields
+    assert c.get("/v1/me").json()["id"] == me["id"]                                     # same key -> same user
+    assert server.signup().get("/v1/me").json()["id"] != me["id"]                       # another browser -> another user
+    for headers in ({}, {"Authorization": "Bearer short"}, {"Authorization": "Bearer " + "!" * 40}, {"Authorization": "Basic abc"}):
+        r = requests.get(server.base + "/v1/me", headers=headers)
+        assert r.status_code == 401
+        err = r.json()["error"]
+        assert err["code"] == "UNAUTHENTICATED" and set(err) == {"code", "message_ar", "message_en", "details", "request_id"}
+        assert r.headers["X-Request-ID"] == err["request_id"]
+    assert requests.post(server.base + "/v1/auth/login", json={}).status_code == 404       # accounts are gone
+    assert requests.post(server.base + "/v1/auth/register", json={}).status_code == 404
+    v = c.post("/v1/projects", {"name": ""})
     assert v.status_code == 422 and v.json()["error"]["code"] == "VALIDATION_ERROR" and v.json()["error"]["details"]
 
 
 def test_profile_patch_and_training_consent(server):
     c = server.signup()
-    r = c.patch("/v1/me", {"locale": "en", "allow_training": True, "name": "Sara"}).json()
-    assert (r["locale"], r["allow_training"], r["name"]) == ("en", True, "Sara")
+    r = c.patch("/v1/me", {"locale": "en", "allow_training": True}).json()
+    assert (r["locale"], r["allow_training"]) == ("en", True)
     assert c.patch("/v1/me", {"locale": "fr"}).status_code == 422
 
 
@@ -50,8 +50,6 @@ def test_full_flow_upload_analyze_edit_export_download(server, video_bytes, srt_
     j = c.post(f"/v1/projects/{pid}/analyze", {"max_clips": 6})
     assert j.status_code == 202 and j.json()["status"] == "queued"
     jid = j.json()["id"]
-    minutes = proj["source"]["duration"] / 60
-    assert abs(c.get("/v1/me").json()["minutes_remaining"] - (120 - minutes)) < 0.05          # credits reserved
     assert c.post(f"/v1/projects/{pid}/analyze", {}).json()["id"] == jid                         # no duplicate active job
 
     server.drain()
@@ -141,39 +139,35 @@ def test_bad_subtitles_rejected(server, video_bytes):
     assert r.status_code == 422
 
 
-# ------------------------------------------------------------------ quota, refunds, failures
-def test_quota_exceeded_and_asr_failure_refunds(server, video_bytes, srt_text, monkeypatch):
+# ------------------------------------------------------------------ no quota, failures, cancel
+def test_no_minutes_limit_and_asr_failure(server, video_bytes, srt_text, monkeypatch):
     c = server.signup()
-    # no subtitles + no ASR installed -> job fails with ASR_UNAVAILABLE and the minutes come back
+    # no subtitles + no ASR installed -> job fails with ASR_UNAVAILABLE
     pid = make_project(c, video_bytes, None)
-    before = c.get("/v1/me").json()["minutes_remaining"]
     jid = c.post(f"/v1/projects/{pid}/analyze", {}).json()["id"]
-    assert c.get("/v1/me").json()["minutes_remaining"] < before
     server.drain()
     j = c.get(f"/v1/jobs/{jid}").json()
     assert j["status"] == "error" and j["error"]["code"] == "ASR_UNAVAILABLE" and j["error"]["message_ar"]
-    assert abs(c.get("/v1/me").json()["minutes_remaining"] - before) < 0.01
     assert c.get(f"/v1/projects/{pid}").json()["status"] == "ready"
     # ASR explicitly disabled -> early 503
     monkeypatch.setenv("ASR_PROVIDER", "none")
     assert c.post(f"/v1/projects/{pid}/analyze", {}).status_code == 503
     monkeypatch.delenv("ASR_PROVIDER")
-    # quota
-    monkeypatch.setitem(svc.PLANS["free"], "minutes", 1)
+    # there is no plan or quota: analysing the same ~2-minute video repeatedly is never refused
     pid2 = make_project(c, video_bytes, srt_text)
-    q = c.post(f"/v1/projects/{pid2}/analyze", {})
-    assert q.status_code == 403 and q.json()["error"]["code"] == "QUOTA_EXCEEDED"
-    assert q.json()["error"]["details"]["needed_minutes"] > q.json()["error"]["details"]["remaining_minutes"]
-    assert c.get(f"/v1/projects/{pid2}").json()["status"] == "ready"
+    for _ in range(3):
+        r = c.post(f"/v1/projects/{pid2}/analyze", {})
+        assert r.status_code in (200, 202) and r.json()["error"] is None
+        server.drain()
+        assert c.get(f"/v1/jobs/{r.json()['id']}").json()["status"] == "done"
 
 
-def test_cancel_queued_job_refunds(server, video_bytes, srt_text):
+def test_cancel_queued_job(server, video_bytes, srt_text):
     c = server.signup()
     pid = make_project(c, video_bytes, srt_text)
-    before = c.get("/v1/me").json()["minutes_remaining"]
     jid = c.post(f"/v1/projects/{pid}/analyze", {}).json()["id"]
     assert c.delete(f"/v1/jobs/{jid}").json()["status"] == "canceled"
-    assert abs(c.get("/v1/me").json()["minutes_remaining"] - before) < 0.01
+    assert c.get(f"/v1/projects/{pid}").json()["status"] == "ready"
     server.drain()                                                                               # canceled job is not run
     assert c.get(f"/v1/jobs/{jid}").json()["status"] == "canceled"
 
@@ -238,12 +232,10 @@ def test_delete_project_and_account_remove_everything(server, video_bytes, srt_t
     assert server.db.one("SELECT COUNT(*) AS n FROM clips")["n"] == 0
     # whole account
     pid2 = make_project(c, video_bytes, srt_text)
-    assert c.delete("/v1/me", {"password": "wrong-pass-123"}).status_code == 401
-    assert c.delete("/v1/me", {"password": "correct-horse-1"}).status_code == 204
+    assert c.delete("/v1/me").status_code == 204                                               # no password: the key is the identity
     assert not server.settings.project_dir(pid2).exists()
-    assert server.db.one("SELECT COUNT(*) AS n FROM users")["n"] == 0
-    assert requests.post(server.base + "/v1/auth/login", json={"email": "a@example.com", "password": "correct-horse-1"}).status_code == 401
-    assert c.get("/v1/me").status_code == 401
+    assert server.db.one("SELECT COUNT(*) AS n FROM projects")["n"] == 0
+    assert c.get("/v1/projects").json()["items"] == []                                         # same key now starts from a clean slate
 
 
 def test_retention_purge(server, video_bytes, srt_text):
@@ -343,7 +335,6 @@ def test_import_url_downloads_then_analyze_works(server, video_bytes, srt_text, 
     j = c.post(f"/v1/projects/{pid}/source-url", {"url": "https://www.youtube.com/watch?v=abc123"})
     assert j.status_code == 202 and j.json()["kind"] == "import" and j.json()["status"] == "queued"
     assert c.post(f"/v1/projects/{pid}/source-url", {"url": "https://www.youtube.com/watch?v=abc123"}).json()["id"] == j.json()["id"]
-    assert c.get("/v1/me").json()["minutes_remaining"] == 120                       # downloading is free
     server.drain()
     done = c.get(f"/v1/jobs/{j.json()['id']}").json()
     assert done["status"] == "done" and done["progress"] == 1 and calls == [("https://www.youtube.com/watch?v=abc123", 180)]
@@ -375,7 +366,6 @@ def test_import_url_failure_is_reported_and_nothing_charged(server, monkeypatch)
     done = c.get(f"/v1/jobs/{j['id']}").json()
     assert done["status"] == "error" and done["error"]["code"] == "DOWNLOAD_FAILED" and "تنزيل" in done["error"]["message_ar"]
     assert c.get(f"/v1/projects/{pid}").json()["source"] is None
-    assert c.get("/v1/me").json()["minutes_remaining"] == 120
 
 
 def test_validate_url_accepts_public_hosts():

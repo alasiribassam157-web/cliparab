@@ -36,13 +36,11 @@ const token = () => page.evaluate(() => localStorage.getItem("cliparab.token"));
 const listProjects = async () => (await (await fetch(api + "/v1/projects", { headers: { Authorization: "Bearer " + (await token()) } })).json()).items;
 
 try {
-  await page.goto(base + "/register");
-  await page.fill('input[type="email"]', "live@example.com");
-  await page.fill('input[type="password"]', "correct-horse-1");
-  await page.locator("form input.input").first().fill("مختبر");
-  await page.locator("form button.btn.primary").click();
-  await page.waitForURL("**/app", { timeout: 15000 });
-  check("registered against the real API", !!(await token()));
+  await page.goto(base + "/");
+  await page.getByRole("link", { name: "ابدأ الآن" }).last().click();
+  await page.waitForURL("**/app/new", { timeout: 15000 });
+  check("no sign-up: an anonymous browser key is created on first use", /^[A-Za-z0-9_-]{32,}$/.test((await token()) ?? ""));
+  check("no login/plan UI in live mode", !/دقيقة متبقية|الخطة|تسجيل الدخول|خروج/.test(await page.textContent("body")));
   await page.goto(base + "/app/new");
   await page.getByRole("button", { name: "من رابط" }).click();
   check("live mode: no demo note on the link tab", !(await page.textContent("form")).includes("لا يُنزَّل الرابط فعليًا"));
@@ -80,6 +78,21 @@ try {
   check("exactly one project, with the downloaded source", projects.length === 1 && projects[0].source?.filename?.includes("حلقة") && projects[0].source.has_subtitles, JSON.stringify(projects[0]?.source));
   check("video streams from the API", (await fetch(`${api}/v1/projects/${projects[0].id}/media?access_token=${await token()}`, { headers: { Range: "bytes=0-99" } })).status === 206);
   check("no unexpected console/page errors", problems.length === 0, problems.join(" | "));
+
+  // 4) no accounts, so privacy comes from the per-browser key: another browser sees nothing of mine
+  const other = await (await browser.newContext({ locale: "ar" })).newPage();
+  await other.goto(base + "/app");
+  await other.waitForSelector("main");
+  await other.waitForFunction(() => document.querySelector("main")?.textContent?.includes("لا توجد مشاريع بعد"), null, { timeout: 15000 });
+  check("a second browser sees none of my projects", !(await other.textContent("main")).includes("حلقة"));
+  // 5) settings: explains the no-account model, and "delete everything" really erases my data
+  await page.goto(base + "/app/settings");
+  await page.getByText("بدون حساب").waitFor({ timeout: 10000 });
+  check("settings explains there is no account", (await page.textContent("main")).includes("مرتبطة بهذا المتصفح"));
+  page.once("dialog", (d) => d.accept());
+  await page.getByRole("button", { name: "حذف كل مشاريعي وبياناتي" }).click();
+  await page.waitForURL(base + "/", { timeout: 10000 });
+  check("delete-all erases my projects", (await listProjects()).length === 0);
 } catch (e) { failures.push("exception: " + e.message); console.log("EXCEPTION", e.message); await shot("live-exception").catch(() => {}); }
 await browser.close(); web.close(); py.stdin.end(); py.kill();
 console.log(failures.length ? `\n${failures.length} FAILED (screens in ${shots})` : "\nALL PASSED");

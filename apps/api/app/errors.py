@@ -5,16 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 MESSAGES: dict[str, tuple[int, str, str]] = {
-    "UNAUTHENTICATED": (401, "يرجى تسجيل الدخول أولًا.", "Authentication required."),
-    "INVALID_CREDENTIALS": (401, "البريد الإلكتروني أو كلمة المرور غير صحيحة.", "Invalid email or password."),
+    "UNAUTHENTICATED": (401, "مفتاح الجلسة مفقود أو غير صالح.", "Missing or invalid session key."),
     "FORBIDDEN": (403, "لا تملك صلاحية لهذا الإجراء.", "You do not have access to this resource."),
     "NOT_FOUND": (404, "العنصر المطلوب غير موجود.", "Resource not found."),
     "VALIDATION_ERROR": (422, "البيانات المدخلة غير صالحة.", "Invalid request data."),
-    "EMAIL_TAKEN": (409, "هذا البريد مسجّل مسبقًا.", "Email already registered."),
-    "REGISTRATION_CLOSED": (403, "التسجيل مغلق حاليًا.", "Registration is closed."),
     "VERSION_CONFLICT": (409, "تم تعديل هذا المقطع من مكان آخر. أعد التحميل ثم حاول مجددًا.", "The clip was modified elsewhere."),
     "PRECONDITION_REQUIRED": (428, "أرسل رقم النسخة في ترويسة If-Match.", "If-Match header with the clip version is required."),
-    "QUOTA_EXCEEDED": (403, "انتهى رصيد الدقائق المجانية لهذا الشهر.", "Monthly minutes quota exceeded."),
     "RATE_LIMITED": (429, "طلبات كثيرة، حاول بعد قليل.", "Too many requests."),
     "FILE_TOO_LARGE": (413, "حجم الملف أكبر من الحد المسموح.", "File exceeds the upload limit."),
     "UNSUPPORTED_MEDIA": (415, "تعذّر قراءة هذا الملف. جرّب MP4 أو MOV أو MKV أو WEBM.", "Unsupported or unreadable media file."),

@@ -2,14 +2,8 @@ export type Locale = "ar" | "en";
 
 export interface User {
   id: string;
-  email: string;
-  name: string;
   locale: Locale;
-  plan: string;
   allow_training: boolean;
-  minutes_remaining: number;
-  minutes_monthly: number;
-  watermark: boolean;
 }
 
 export interface SourceInfo {
@@ -154,12 +148,10 @@ export class ApiException extends Error {
 export interface Backend {
   mode: "demo" | "live";
   token(): string | null;
-  register(email: string, password: string, name: string): Promise<User>;
-  login(email: string, password: string): Promise<User>;
-  logout(): void;
   me(): Promise<User>;
-  updateMe(patch: Partial<Pick<User, "name" | "locale" | "allow_training">>): Promise<User>;
-  deleteMe(password: string): Promise<void>;
+  updateMe(patch: Partial<Pick<User, "locale" | "allow_training">>): Promise<User>;
+  /** Erase every project and file that belongs to this browser. */
+  deleteMe(): Promise<void>;
   listProjects(): Promise<Project[]>;
   createProject(name: string, language: string): Promise<Project>;
   getProject(id: string): Promise<Project>;

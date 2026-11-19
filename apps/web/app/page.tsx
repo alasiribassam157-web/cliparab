@@ -1,21 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Shell } from "@/components/ui";
-import { useBackend } from "@/lib/backend";
 import { useI18n } from "@/lib/i18n";
 
 export default function Landing() {
   const { t } = useI18n();
-  const backend = useBackend();
-  const router = useRouter();
-  const demo = backend.mode === "demo";
-
-  const tryDemo = async () => {
-    await backend.login("guest@cliparab.demo", "demo");
-    router.push("/app");
-  };
 
   return (
     <Shell>
@@ -23,8 +13,7 @@ export default function Landing() {
         <h1>{t("hero_title")}</h1>
         <p>{t("hero_sub")}</p>
         <div className="row" style={{ justifyContent: "center" }}>
-          {demo ? <button className="btn primary" onClick={tryDemo}>{t("demo_try")}</button> : <Link className="btn primary" href="/register">{t("nav_register")}</Link>}
-          <Link className="btn" href="/login">{t("nav_login")}</Link>
+          <Link className="btn primary" href="/app/new">{t("start_now")}</Link>
         </div>
         <div className="demo-phones" aria-hidden>
           {["c01", "c02", "c03"].map((id) => (

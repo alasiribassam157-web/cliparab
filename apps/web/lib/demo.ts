@@ -10,14 +10,13 @@ const ANALYZE_MS = 6000;
 const EXPORT_MS = 3500;
 
 interface DemoData {
-  user: User | null;
+  user: User;
   projects: Project[];
   clips: Clip[];
   exports: (ExportItem & { started: number; sid: string })[];
   jobs: Record<string, { id: string; kind: Job["kind"]; started: number; ms: number; project_id: string | null }>;
   comments: Record<string, ReviewPage["comments"]>;
   links: Record<string, string>;
-  used: number;
 }
 
 interface DemoFile {
@@ -32,14 +31,18 @@ interface DemoFile {
 let fileCache: Promise<DemoFile> | null = null;
 const loadFile = () => (fileCache ??= fetch("/demo/demo.json").then((r) => r.json() as Promise<DemoFile>));
 
-const empty = (): DemoData => ({ user: null, projects: [], clips: [], exports: [], jobs: {}, comments: {}, links: {}, used: 0 });
+const guest = (): User => ({ id: "demo-user", locale: "ar", allow_training: false });
+const empty = (): DemoData => ({ user: guest(), projects: [], clips: [], exports: [], jobs: {}, comments: {}, links: {} });
 const uid = (p: string) => p + Math.random().toString(36).slice(2, 10);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function load(): DemoData {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...empty(), ...JSON.parse(raw) } : empty();
+    if (!raw) return empty();
+    const d = { ...empty(), ...JSON.parse(raw) } as DemoData;
+    d.user = { ...guest(), locale: d.user?.locale === "en" ? "en" : "ar", allow_training: !!d.user?.allow_training };  // tolerate data saved by older versions
+    return d;
   } catch {
     return empty();
   }
@@ -47,11 +50,6 @@ function load(): DemoData {
 function save(d: DemoData) {
   try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* storage full or blocked */ }
 }
-
-const mkUser = (email: string, name: string, used: number): User => ({
-  id: "demo-user", email, name: name || "ضيف", locale: "ar", plan: "free", allow_training: false,
-  minutes_remaining: Math.max(0, 120 - used), minutes_monthly: 120, watermark: false,
-});
 
 function jobView(d: DemoData, id: string): Job {
   const j = d.jobs[id];
@@ -79,10 +77,7 @@ function settle(d: DemoData): void {
 
 export function createDemoBackend(): Backend {
   const state = (): DemoData => { const d = load(); settle(d); return d; };
-  const needUser = (d: DemoData) => {
-    if (!d.user) throw new ApiException(401, "UNAUTHENTICATED", "يرجى تسجيل الدخول أولًا.", "Authentication required.");
-    return d.user;
-  };
+  const needUser = (d: DemoData) => d.user;
   const projectOf = (d: DemoData, id: string) => {
     const p = d.projects.find((x) => x.id === id);
     if (!p) throw new ApiException(404, "NOT_FOUND", "العنصر المطلوب غير موجود.", "Resource not found.");
@@ -94,20 +89,10 @@ export function createDemoBackend(): Backend {
     return c;
   };
 
-  const signIn = async (email: string, name: string) => {
-    const d = load();
-    d.user = mkUser(email, name, d.used);
-    save(d);
-    return d.user;
-  };
-
   return {
     mode: "demo",
-    token: () => (load().user ? "demo" : null),
-    register: (email, _pw, name) => signIn(email, name),
-    login: (email) => signIn(email, "ضيف"),
-    logout() { const d = load(); d.user = null; save(d); },
-    async me() { const d = state(); const u = needUser(d); return { ...u, minutes_remaining: Math.max(0, 120 - d.used) }; },
+    token: () => "demo",
+    async me() { return needUser(state()); },
     async updateMe(patch) { const d = state(); const u = needUser(d); d.user = { ...u, ...patch }; save(d); return d.user; },
     async deleteMe() { localStorage.removeItem(KEY); },
     async listProjects() { const d = state(); needUser(d); save(d); return [...d.projects].reverse(); },
@@ -152,7 +137,6 @@ export function createDemoBackend(): Backend {
       if (!p.source) throw new ApiException(409, "NO_SOURCE", "ارفع فيديو أولًا.", "Upload a source video first.");
       const id = uid("dj_");
       d.jobs[id] = { id, kind: "analyze", started: Date.now(), ms: ANALYZE_MS, project_id: pid };
-      d.used += Math.round((p.source.duration / 60) * 100) / 100;
       p.status = "processing"; save(d);
       return jobView(d, id);
     },

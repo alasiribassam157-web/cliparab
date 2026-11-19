@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { createLiveBackend } from "./api";
 import { createDemoBackend } from "./demo";
 import { ApiException, type Backend, type User } from "./types";
@@ -22,21 +21,19 @@ export function useBackend(): Backend {
   return b;
 }
 
-/** Loads the signed-in user; redirects to /login on 401. */
-export function useRequireUser(): { user: User | null; refresh: () => void } {
+/** Loads this browser's (anonymous) user. There is no login; `error` is set when the server cannot be reached. */
+export function useCurrentUser(): { user: User | null; error: boolean; refresh: () => void } {
   const backend = useBackend();
-  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
+  const [error, setError] = useState(false);
   const [tick, setTick] = useState(0);
   useEffect(() => {
     let alive = true;
-    backend.me().then((u) => alive && setUser(u)).catch((e) => {
-      if (e instanceof ApiException && e.status === 401) router.replace("/login");
-    });
+    backend.me().then((u) => { if (alive) { setUser(u); setError(false); } }).catch(() => alive && setError(true));
     return () => { alive = false; };
-  }, [backend, router, tick]);
+  }, [backend, tick]);
   const refresh = useCallback(() => setTick((x) => x + 1), []);
-  return { user, refresh };
+  return { user, error, refresh };
 }
 
 export function errorText(e: unknown, locale: "ar" | "en"): string {

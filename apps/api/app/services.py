@@ -4,50 +4,14 @@ import shutil
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .config import PLANS, Settings
+from .config import Settings
 from .db import Db, jload, new_id, now
 from .errors import ApiError
 
 
-# ---------------------------------------------------------------- credits (ledger)
-def month_start() -> str:
-    n = datetime.now(timezone.utc)
-    return n.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat(timespec="seconds")
-
-
-def remaining_minutes(db: Db, user: dict) -> float:
-    grant = PLANS.get(user["plan"], PLANS["free"])["minutes"]
-    row = db.one("SELECT COALESCE(SUM(delta_minutes), 0) AS s FROM credits WHERE user_id=? AND created_at>=?",
-                 user["id"], month_start())
-    return round(grant + row["s"], 2)
-
-
-def reserve_minutes(db: Db, user: dict, minutes: float, ref: str) -> float:
-    """Reserve atomically; the ledger insert and the balance check share one transaction."""
-    grant = PLANS.get(user["plan"], PLANS["free"])["minutes"]
-    with db.tx() as c:
-        s = c.execute("SELECT COALESCE(SUM(delta_minutes), 0) FROM credits WHERE user_id=? AND created_at>=?",
-                      (user["id"], month_start())).fetchone()[0]
-        remaining = grant + s
-        if remaining + 1e-9 < minutes:
-            raise ApiError("QUOTA_EXCEEDED", {"needed_minutes": round(minutes, 2), "remaining_minutes": round(remaining, 2)})
-        c.execute("INSERT INTO credits(id,user_id,delta_minutes,reason,ref,created_at) VALUES (?,?,?,?,?,?)",
-                  (new_id("cr_"), user["id"], -minutes, "analyze", ref, now()))
-    return minutes
-
-
-def refund_minutes(db: Db, user_id: str, minutes: float, ref: str) -> None:
-    if minutes > 0:
-        db.run("INSERT INTO credits(id,user_id,delta_minutes,reason,ref,created_at) VALUES (?,?,?,?,?,?)",
-               new_id("cr_"), user_id, minutes, "refund", ref, now())
-
-
 # ---------------------------------------------------------------- serializers
-def public_user(u: dict, db: Db) -> dict:
-    plan = PLANS.get(u["plan"], PLANS["free"])
-    return {"id": u["id"], "email": u["email"], "name": u["name"], "locale": u["locale"], "plan": u["plan"],
-            "allow_training": bool(u["allow_training"]), "created_at": u["created_at"],
-            "minutes_remaining": remaining_minutes(db, u), "minutes_monthly": plan["minutes"], "watermark": plan["watermark"]}
+def public_user(u: dict) -> dict:
+    return {"id": u["id"], "locale": u["locale"], "allow_training": bool(u["allow_training"]), "created_at": u["created_at"]}
 
 
 def public_project(p: dict, source: dict | None = None) -> dict:

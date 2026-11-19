@@ -43,11 +43,10 @@ function LocaleToggle() {
   );
 }
 
-export function Shell({ children, authed = false, minutes }: { children: ReactNode; authed?: boolean; minutes?: number }) {
+export function Shell({ children, authed = false }: { children: ReactNode; authed?: boolean }) {
   const { t } = useI18n();
   const backend = useBackend();
   const path = usePathname() ?? "";
-  const router = useRouter();
   return (
     <>
       {backend.mode === "demo" && <div className="banner"><div className="container">{t("demo_banner")}</div></div>}
@@ -61,20 +60,9 @@ export function Shell({ children, authed = false, minutes }: { children: ReactNo
             </nav>
           )}
           <span className="grow" />
-          {authed && minutes !== undefined && <span className="chip">{Math.round(minutes)} {t("minutes_left")}</span>}
           <LocaleToggle />
           <ThemeToggle />
-          {authed ? (
-            <>
-              <Link className="btn primary sm" href="/app/new">{t("nav_new")}</Link>
-              <button className="btn sm" onClick={() => { backend.logout(); router.push("/"); }}>{t("nav_logout")}</button>
-            </>
-          ) : (
-            <>
-              <Link className="btn sm" href="/login">{t("nav_login")}</Link>
-              <Link className="btn primary sm" href="/register">{t("nav_register")}</Link>
-            </>
-          )}
+          <Link className="btn primary sm" href={authed ? "/app/new" : "/app"}>{authed ? t("nav_new") : t("start_now")}</Link>
         </div>
       </header>
       <main className="container" style={{ paddingBlock: 28 }}>{children}</main>

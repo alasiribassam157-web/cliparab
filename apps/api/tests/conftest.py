@@ -1,4 +1,5 @@
 import os
+import secrets
 import shutil
 import socket
 import subprocess
@@ -45,7 +46,7 @@ class Client:
 
 class Server:
     def __init__(self, tmp: Path, **overrides):
-        self.settings = Settings(data_dir=tmp, secret="test-secret", rate_limit_per_min=100000, **overrides)
+        self.settings = Settings(data_dir=tmp, rate_limit_per_min=100000, **overrides)
         self.app = create_app(self.settings)
         self.db = self.app.state.ctx.db
         s = socket.socket(); s.bind(("127.0.0.1", 0)); self.port = s.getsockname()[1]; s.close()
@@ -65,10 +66,9 @@ class Server:
     def client(self, token=None) -> Client:
         return Client(self.base, token)
 
-    def signup(self, email="a@example.com", password="correct-horse-1", name="أحمد") -> Client:
-        r = requests.post(self.base + "/v1/auth/register", json={"email": email, "password": password, "name": name}, timeout=30)
-        assert r.status_code == 201, r.text
-        return Client(self.base, r.json()["token"])
+    def signup(self, *_ignored, **_ignored_kw) -> Client:
+        """A new anonymous user: a fresh random session key (arguments are accepted and ignored for older call sites)."""
+        return Client(self.base, secrets.token_urlsafe(32))
 
     def drain(self):
         while worker.run_one(self.db, self.settings):

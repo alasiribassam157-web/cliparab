@@ -1,5 +1,5 @@
 # Full stack: API + worker + web.   docker compose up --build
-# Open http://localhost:3000  (register an account, upload a video or an .srt-backed video).
+# Open http://localhost:3000  (no sign-up: upload a video, or paste a link, and go).
 services:
   api:
     build: { context: ., dockerfile: infra/docker/api.Dockerfile, args: { WITH_WHISPER: "${WITH_WHISPER:-0}" } }

@@ -14,9 +14,7 @@ const failures = [];
 const check = (n, ok, x = "") => { console.log((ok ? "PASS " : "FAIL ") + n + (x ? "  " + x : "")); if (!ok) failures.push(n); };
 try {
   await page.goto(base + "/");
-  await page.getByRole("button", { name: "جرّب الآن بدون تسجيل" }).click();
-  await page.waitForURL("**/app");
-  await page.getByRole("link", { name: "مشروع جديد" }).first().click();
+  await page.getByRole("link", { name: "ابدأ الآن" }).last().click();     // hero button goes straight to the new-project form
   await page.waitForURL("**/app/new");
   check("file mode is the default (drop zone visible)", await page.locator(".drop").isVisible());
   await page.getByRole("button", { name: "من رابط" }).click();

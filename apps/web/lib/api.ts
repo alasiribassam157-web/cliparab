@@ -2,19 +2,26 @@ import { ApiException, type Backend, type Clip, type EditState, type ExportItem,
 
 const TOKEN_KEY = "cliparab.token";
 
+/** 256 random bits, URL-safe. This key is the whole identity: no account, no password. */
+function newKey(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
 export function createLiveBackend(base: string): Backend {
   const root = base.replace(/\/$/, "");
-  const getToken = () => {
-    try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
-  };
-  const setToken = (t: string | null) => {
-    try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ }
+  let memoryKey: string | null = null;   // used only if localStorage is blocked
+  const getToken = (): string => {
+    try {
+      let k = localStorage.getItem(TOKEN_KEY);
+      if (!k) { k = newKey(); localStorage.setItem(TOKEN_KEY, k); }
+      return k;
+    } catch { return (memoryKey ??= newKey()); }
   };
 
   async function call<T>(method: string, path: string, body?: unknown, headers: Record<string, string> = {}, raw?: BodyInit): Promise<T> {
     const h: Record<string, string> = { ...headers };
-    const tok = getToken();
-    if (tok) h.Authorization = `Bearer ${tok}`;
+    h.Authorization = `Bearer ${getToken()}`;
     if (body !== undefined) h["Content-Type"] = "application/json";
     const res = await fetch(root + path, { method, headers: h, body: raw ?? (body !== undefined ? JSON.stringify(body) : undefined) });
     if (res.status === 204) return undefined as T;
@@ -28,28 +35,16 @@ export function createLiveBackend(base: string): Backend {
   }
 
   const withToken = (url: string, download = false) => {
-    const tok = getToken();
-    const q = [tok ? `access_token=${encodeURIComponent(tok)}` : "", download ? "download=1" : ""].filter(Boolean).join("&");
+    const q = [`access_token=${encodeURIComponent(getToken())}`, download ? "download=1" : ""].join("&");
     return root + url + (q ? (url.includes("?") ? "&" : "?") + q : "");
   };
 
   return {
     mode: "live",
     token: getToken,
-    async register(email, password, name) {
-      const r = await call<{ token: string; user: User }>("POST", "/v1/auth/register", { email, password, name });
-      setToken(r.token);
-      return r.user;
-    },
-    async login(email, password) {
-      const r = await call<{ token: string; user: User }>("POST", "/v1/auth/login", { email, password });
-      setToken(r.token);
-      return r.user;
-    },
-    logout() { setToken(null); },
     me: () => call<User>("GET", "/v1/me"),
     updateMe: (patch) => call<User>("PATCH", "/v1/me", patch),
-    deleteMe: async (password) => { await call<void>("DELETE", "/v1/me", { password }); setToken(null); },
+    deleteMe: async () => { await call<void>("DELETE", "/v1/me"); },
     listProjects: async () => (await call<{ items: Project[] }>("GET", "/v1/projects")).items,
     createProject: (name, language) => call<Project>("POST", "/v1/projects", { name, language }),
     getProject: (id) => call<Project>("GET", `/v1/projects/${id}`),
@@ -58,8 +53,7 @@ export function createLiveBackend(base: string): Backend {
       return new Promise<Project>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhr.open("POST", `${root}/v1/projects/${pid}/source?filename=${encodeURIComponent(file.name)}`);
-        const tok = getToken();
-        if (tok) xhr.setRequestHeader("Authorization", `Bearer ${tok}`);
+        xhr.setRequestHeader("Authorization", `Bearer ${getToken()}`);
         xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
         xhr.onload = () => {
           let data: any = null;

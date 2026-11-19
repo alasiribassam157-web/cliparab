@@ -29,7 +29,7 @@ from . import services as svc
 from .config import Settings
 from .db import Db, jdump, jload, new_id, now
 from .errors import ApiError
-from .security import hash_password, make_token, read_token, verify_password
+from .security import user_id_for_key
 
 ALLOWED_EXT = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".mp3", ".wav", ".m4a"}
 
@@ -75,12 +75,16 @@ def build_routes(ctx: Ctx) -> list[Route]:
         return handler
 
     def user_of(request: Request, allow_query_token: bool = False) -> dict:
+        """The caller's anonymous user, created on first use from their session key."""
         auth = request.headers.get("authorization", "")
-        token = auth[7:] if auth.lower().startswith("bearer ") else (request.query_params.get("access_token") if allow_query_token else None)
-        uid = read_token(st.secret, token) if token else None
-        u = db.one("SELECT * FROM users WHERE id=?", uid) if uid else None
-        if not u:
+        key = auth[7:] if auth.lower().startswith("bearer ") else (request.query_params.get("access_token") if allow_query_token else None)
+        uid = user_id_for_key(key)
+        if not uid:
             raise ApiError("UNAUTHENTICATED")
+        u = db.one("SELECT * FROM users WHERE id=?", uid)
+        if not u:
+            db.run("INSERT OR IGNORE INTO users(id,email,name,pw_hash,created_at) VALUES (?,?,?,?,?)", uid, f"{uid}@device.local", "", "-", now())
+            u = db.one("SELECT * FROM users WHERE id=?", uid)
         ctx.rate_limit(u["id"])
         return u
 
@@ -127,57 +131,26 @@ def build_routes(ctx: Ctx) -> list[Route]:
             db.run("INSERT OR IGNORE INTO idempotency(key,user_id,route,status_code,response,created_at) VALUES (?,?,?,?,?,?)",
                    key, u["id"], route, status, jdump(body), now())
 
-    def token_for(uid: str) -> str:
-        return make_token(st.secret, uid, st.token_ttl_hours * 3600)
-
     # ------------------------------------------------------------------ meta
     @endpoint
     async def health(request: Request) -> Response:
         db.one("SELECT 1 AS ok")
         return JSONResponse({"status": "ok", "time": now()})
 
-    # ------------------------------------------------------------------ auth / account
-    @endpoint
-    async def register(request: Request) -> Response:
-        if not st.allow_registration:
-            raise ApiError("REGISTRATION_CLOSED")
-        ctx.rate_limit("ip:" + (request.client.host if request.client else "?"))
-        b = await parse(request, S.Register)
-        if db.one("SELECT id FROM users WHERE email=?", b.email):
-            raise ApiError("EMAIL_TAKEN")
-        uid = new_id("u_")
-        pw = await anyio.to_thread.run_sync(hash_password, b.password)
-        db.run("INSERT INTO users(id,email,name,pw_hash,created_at) VALUES (?,?,?,?,?)", uid, b.email, b.name, pw, now())
-        audit(uid, "user.registered")
-        u = db.one("SELECT * FROM users WHERE id=?", uid)
-        return JSONResponse({"token": token_for(uid), "user": svc.public_user(u, db)}, status_code=201)
-
-    @endpoint
-    async def login(request: Request) -> Response:
-        ctx.rate_limit("ip:" + (request.client.host if request.client else "?"))
-        b = await parse(request, S.Login)
-        u = db.one("SELECT * FROM users WHERE email=?", b.email.strip().lower())
-        ok = u and await anyio.to_thread.run_sync(verify_password, b.password, u["pw_hash"])
-        if not ok:
-            raise ApiError("INVALID_CREDENTIALS")
-        return JSONResponse({"token": token_for(u["id"]), "user": svc.public_user(u, db)})
-
+    # ------------------------------------------------------------------ account (anonymous, per browser)
     @endpoint
     async def me(request: Request) -> Response:
         u = user_of(request)
         if request.method == "PATCH":
             b = await parse(request, S.ProfilePatch)
-            for col, val in (("name", b.name), ("locale", b.locale), ("allow_training", None if b.allow_training is None else int(b.allow_training))):
+            for col, val in (("locale", b.locale), ("allow_training", None if b.allow_training is None else int(b.allow_training))):
                 if val is not None:
                     db.run(f"UPDATE users SET {col}=? WHERE id=?", val, u["id"])
             u = db.one("SELECT * FROM users WHERE id=?", u["id"])
         elif request.method == "DELETE":
-            b = await parse(request, S.DeleteAccount)
-            if not verify_password(b.password, u["pw_hash"]):
-                raise ApiError("INVALID_CREDENTIALS")
-            await anyio.to_thread.run_sync(svc.delete_user, db, st, u["id"])
+            await anyio.to_thread.run_sync(svc.delete_user, db, st, u["id"])      # erases every project and file of this browser
             return Response(status_code=204)
-        return JSONResponse(svc.public_user(u, db))
+        return JSONResponse(svc.public_user(u))
 
     # ------------------------------------------------------------------ projects
     @endpoint
@@ -257,7 +230,7 @@ def build_routes(ctx: Ctx) -> list[Route]:
         active = db.one("SELECT * FROM jobs WHERE project_id=? AND kind='import' AND status IN ('queued','running')", p["id"])
         if active:
             return JSONResponse(svc.public_job(active), status_code=200)
-        job = create_job(u, "import", p["id"], {"url": url}, 0.0)
+        job = create_job(u, "import", p["id"], {"url": url})
         audit(u["id"], "source.import_url", {"project": p["id"], "host": url.split("/")[2]})
         return JSONResponse(svc.public_job(job), status_code=202)
 
@@ -309,10 +282,10 @@ def build_routes(ctx: Ctx) -> list[Route]:
                              "segments": [s.to_dict() for s in tr.segments]})
 
     # ------------------------------------------------------------------ jobs
-    def create_job(u: dict, kind: str, project_id: str | None, payload: dict, credits: float = 0.0) -> dict:
+    def create_job(u: dict, kind: str, project_id: str | None, payload: dict) -> dict:
         jid = new_id("j_")
-        db.run("INSERT INTO jobs(id,user_id,project_id,kind,payload,credits_reserved,created_at) VALUES (?,?,?,?,?,?,?)",
-               jid, u["id"], project_id, kind, jdump(payload), credits, now())
+        db.run("INSERT INTO jobs(id,user_id,project_id,kind,payload,created_at) VALUES (?,?,?,?,?,?)",
+               jid, u["id"], project_id, kind, jdump(payload), now())
         return db.one("SELECT * FROM jobs WHERE id=?", jid)
 
     @endpoint
@@ -333,14 +306,7 @@ def build_routes(ctx: Ctx) -> list[Route]:
         import os
         if not src["subtitles_path"] and os.getenv("ASR_PROVIDER", "").lower() == "none":
             raise ApiError("ASR_UNAVAILABLE")
-        minutes = round(src["duration"] / 60, 2)
-        job = create_job(u, "analyze", p["id"], b.model_dump(), 0.0)
-        try:
-            svc.reserve_minutes(db, u, minutes, job["id"])
-        except ApiError:
-            db.run("DELETE FROM jobs WHERE id=?", job["id"])
-            raise
-        db.run("UPDATE jobs SET credits_reserved=? WHERE id=?", minutes, job["id"])
+        job = create_job(u, "analyze", p["id"], b.model_dump())
         touch(p["id"], "processing")
         body = svc.public_job(db.one("SELECT * FROM jobs WHERE id=?", job["id"]))
         remember(key, u, route, 202, body)
@@ -352,10 +318,9 @@ def build_routes(ctx: Ctx) -> list[Route]:
         j = db.one("SELECT * FROM jobs WHERE id=? AND user_id=?", request.path_params["jid"], u["id"])
         if not j:
             raise ApiError("NOT_FOUND")
-        if request.method == "DELETE":  # cancel a queued job and refund
+        if request.method == "DELETE":  # cancel a queued job
             n = db.run("UPDATE jobs SET status='canceled', finished_at=? WHERE id=? AND status='queued'", now(), j["id"])
             if n:
-                svc.refund_minutes(db, u["id"], j["credits_reserved"], j["id"])
                 if j["project_id"]:
                     touch(j["project_id"], "ready")
             j = db.one("SELECT * FROM jobs WHERE id=?", j["id"])
@@ -566,8 +531,6 @@ def build_routes(ctx: Ctx) -> list[Route]:
 
     return [
         Route("/healthz", health),
-        Route("/v1/auth/register", register, methods=["POST"]),
-        Route("/v1/auth/login", login, methods=["POST"]),
         Route("/v1/me", me, methods=["GET", "PATCH", "DELETE"]),
         Route("/v1/projects", projects, methods=["GET", "POST"]),
         Route("/v1/projects/{pid}", project, methods=["GET", "DELETE"]),
