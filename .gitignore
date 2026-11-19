@@ -1,0 +1,10 @@
+node_modules/
+.next/
+__pycache__/
+*.pyc
+.env
+.venv/
+data/
+*.sqlite3
+.pytest_cache/
+.DS_Store

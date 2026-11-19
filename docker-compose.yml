@@ -1,0 +1,32 @@
+# Full stack: API + worker + web.   docker compose up --build
+# Open http://localhost:3000  (register an account, upload a video or an .srt-backed video).
+services:
+  api:
+    build: { context: ., dockerfile: infra/docker/api.Dockerfile, args: { WITH_WHISPER: "${WITH_WHISPER:-0}" } }
+    env_file: [.env]
+    environment:
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+    ports: ["8000:8000"]
+    volumes: ["cliparab-data:/data"]
+    restart: unless-stopped
+
+  worker:
+    build: { context: ., dockerfile: infra/docker/api.Dockerfile, args: { WITH_WHISPER: "${WITH_WHISPER:-0}" } }
+    command: ["cliparab-worker"]
+    env_file: [.env]
+    volumes: ["cliparab-data:/data", "whisper-cache:/root/.cache"]
+    restart: unless-stopped
+    # scale for throughput:  docker compose up --scale worker=3
+
+  web:
+    build:
+      context: .
+      dockerfile: infra/docker/web.Dockerfile
+      args: { NEXT_PUBLIC_API_URL: "${PUBLIC_API_URL:-http://localhost:8000}" }
+    ports: ["3000:3000"]
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  cliparab-data:
+  whisper-cache:

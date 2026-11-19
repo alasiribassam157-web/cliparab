@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cliparab-api"
+version = "0.1.0"
+description = "ClipArab HTTP API (Starlette + Pydantic) and job worker"
+requires-python = ">=3.11"
+dependencies = ["starlette>=0.40", "uvicorn>=0.30", "pydantic>=2.6", "python-multipart>=0.0.9", "cliparab-core"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "requests>=2.31"]
+
+[project.scripts]
+cliparab-api = "app.main:run"
+cliparab-worker = "app.worker:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
