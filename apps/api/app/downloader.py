@@ -86,6 +86,16 @@ def available() -> bool:
         return shutil.which("yt-dlp") is not None
 
 
+def format_for(max_bytes: int) -> str:
+    """Best quality up to 1080p that still fits ``max_bytes``; long videos step down to 720p/480p instead of failing.
+
+    ``filesize_approx<=?`` keeps streams whose size is unknown, so short or size-less sources still get 1080p.
+    """
+    v = int(max_bytes * 0.9)
+    return (f"bv*[height<=1080][filesize_approx<=?{v}]+ba/bv*[height<=720][filesize_approx<=?{v}]+ba/"
+            f"bv*[height<=480][filesize_approx<=?{v}]+ba/b[height<=720][filesize_approx<=?{v}]/b[height<=480]/b")
+
+
 def _opts(dest: Path, max_minutes: int, max_bytes: int, hook: Callable[[float], None] | None) -> dict:
     def too_long(info, *, incomplete=False):
         d = info.get("duration")
@@ -101,7 +111,7 @@ def _opts(dest: Path, max_minutes: int, max_bytes: int, hook: Callable[[float], 
 
     o: dict = {
         "outtmpl": str(dest / "import.%(ext)s"), "noplaylist": True, "quiet": True, "no_warnings": True, "restrictfilenames": True,
-        "format": "bv*[height<=1080]+ba/b[height<=1080]/b", "merge_output_format": "mp4", "max_filesize": max_bytes,
+        "format": format_for(max_bytes), "merge_output_format": "mp4", "max_filesize": max_bytes,
         "match_filter": too_long, "socket_timeout": 30, "retries": 3, "progress_hooks": [progress], "nocheckcertificate": False,
     }
     cookies = os.getenv("YTDLP_COOKIES_FILE")
@@ -136,7 +146,7 @@ def download(url: str, dest: Path, max_minutes: int, max_bytes: int, hook: Calla
             info = (info.get("entries") or [{}])[0]
         title = (info.get("title") or "")[:160]
     elif shutil.which("yt-dlp"):
-        cmd = ["yt-dlp", "--no-playlist", "--quiet", "--no-warnings", "--restrict-filenames", "-f", "bv*[height<=1080]+ba/b[height<=1080]/b",
+        cmd = ["yt-dlp", "--no-playlist", "--quiet", "--no-warnings", "--restrict-filenames", "-f", format_for(max_bytes),
                "--merge-output-format", "mp4", "--max-filesize", str(max_bytes), "--match-filter", f"duration<={max_minutes * 60}",
                "-o", str(dest / "import.%(ext)s"), "--print", "title", "--no-simulate", url]
         cookies = os.getenv("YTDLP_COOKIES_FILE")

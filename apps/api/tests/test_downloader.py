@@ -59,10 +59,19 @@ def test_success_sets_safe_options_and_reports_progress(tmp_path, monkeypatch):
     assert path.name == "import.mp4" and title == "عنوان الفيديو" and ticks == [0.5]
     o = seen["opts"]
     assert o["noplaylist"] is True and o["max_filesize"] == 2 * 1024**3 and o["merge_output_format"] == "mp4"
-    assert o["restrictfilenames"] is True and "height<=1080" in o["format"]
+    assert o["restrictfilenames"] is True and o["format"].startswith("bv*[height<=1080]")
+
     assert o["match_filter"]({"duration": 179 * 60}) is None and "too long" in o["match_filter"]({"duration": 181 * 60})
     assert o["match_filter"]({}) is None                                           # unknown duration is allowed; probe re-checks it
     assert "cookiefile" not in o
+
+
+def test_long_videos_step_down_quality_instead_of_exceeding_the_size_cap():
+    f = dl.format_for(2 * 1024**3)
+    alts = f.split("/")
+    assert alts[0].startswith("bv*[height<=1080]") and any("height<=720" in a for a in alts) and alts[-1] == "b"
+    assert all("filesize_approx<=?" in a for a in alts[:4])           # each preferred option must fit the cap
+    assert str(int(2 * 1024**3 * 0.9)) in alts[0]
 
 
 def test_cookies_file_is_used_when_configured(tmp_path, monkeypatch):
