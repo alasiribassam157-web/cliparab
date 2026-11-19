@@ -41,7 +41,7 @@ try {
   await page.fill("input.input >> nth=0", "حلقة الإنتاجية");
   await page.getByRole("button", { name: "ابدأ التحليل" }).click();
   await page.waitForURL(/\/app\/p\//);
-  check("processing screen appears", await page.getByTestId("processing").isVisible());
+  check("processing screen appears", await page.getByTestId("processing").waitFor({ timeout: 8000 }).then(() => true, () => false));
   await shot("03-processing");
   await page.waitForSelector('[data-testid="clip-card"]', { timeout: 30000 });
   const cards = await page.locator('[data-testid="clip-card"]').count();

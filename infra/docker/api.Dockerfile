@@ -1,9 +1,11 @@
 # API + worker image (same image, different command). Build from the repo root:
 #   docker build -f infra/docker/api.Dockerfile -t cliparab-api .
 # Add Whisper for local transcription:  --build-arg WITH_WHISPER=1
+# yt-dlp (import from a link) is included; drop it with:  --build-arg WITH_YTDLP=0
 FROM python:3.12-slim
 
 ARG WITH_WHISPER=0
+ARG WITH_YTDLP=1
 ENV PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1 DATA_DIR=/data CLIPARAB_FONTS_DIR=/usr/local/share/fonts/cliparab
 
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg fontconfig fonts-noto-core fonts-dejavu-core curl ca-certificates \
@@ -18,7 +20,8 @@ COPY scripts/fetch-fonts.sh /tmp/fetch-fonts.sh
 RUN (/tmp/fetch-fonts.sh /usr/local/share/fonts/cliparab || true) && fc-cache -f
 
 RUN pip install /app/packages/core /app/apps/api opencv-python-headless \
-    && if [ "$WITH_WHISPER" = "1" ]; then pip install "/app/packages/core[whisper]"; fi
+    && if [ "$WITH_WHISPER" = "1" ]; then pip install "/app/packages/core[whisper]"; fi \
+    && if [ "$WITH_YTDLP" = "1" ]; then pip install yt-dlp; fi
 
 VOLUME /data
 EXPOSE 8000

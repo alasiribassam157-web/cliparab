@@ -10,6 +10,7 @@ import argparse
 import json
 import logging
 import os
+import shutil
 import signal
 import time
 from datetime import datetime, timedelta, timezone
@@ -21,6 +22,7 @@ from cliparab_core.pipeline import AnalyzeOptions, Project, analyze
 from cliparab_core.providers import get_llm, get_transcriber
 from cliparab_core.render import EditState, render_clip
 
+from . import downloader
 from . import services as svc
 from .config import Settings
 from .db import Db, jdump, jload, new_id, now
@@ -173,7 +175,50 @@ def handle_export(db: Db, st: Settings, job: dict) -> None:
     finish(db, job, {"export_id": e["id"], "duration": info["duration"], "width": info["width"], "height": info["height"]})
 
 
-HANDLERS = {"analyze": handle_analyze, "export": handle_export}
+def handle_import(db: Db, st: Settings, job: dict) -> None:
+    """Download the project's source from a public link, probe it, and install it like an upload."""
+    payload = jload(job["payload"], {})
+    p = db.one("SELECT * FROM projects WHERE id=?", job["project_id"])
+    if not p:
+        return fail(db, job, "NOT_FOUND")
+    pdir = st.project_dir(p["id"])
+    set_progress(db, job["id"], 0.02, "تنزيل الفيديو")
+    last = [0.0]
+
+    def hook(frac: float) -> None:
+        if frac - last[0] >= 0.02 or frac >= 1.0:
+            last[0] = frac
+            set_progress(db, job["id"], 0.03 + 0.85 * frac, "تنزيل الفيديو")
+
+    try:
+        path, title = downloader.download(payload.get("url", ""), pdir / "import", st.max_source_minutes, st.max_upload_mb * 1024 * 1024, hook)
+    except downloader.DownloadError as e:
+        log.warning("import failed for %s: %s", p["id"], e)
+        return fail(db, job, e.code, e.detail[:200] or None)
+    set_progress(db, job["id"], 0.9, "قراءة الفيديو")
+    try:
+        info = media.probe(str(path))
+    except media.MediaError:
+        shutil.rmtree(pdir / "import", ignore_errors=True)
+        return fail(db, job, "UNSUPPORTED_MEDIA")
+    if info["duration"] > st.max_source_minutes * 60:
+        shutil.rmtree(pdir / "import", ignore_errors=True)
+        return fail(db, job, "TOO_LONG")
+    size = path.stat().st_size
+    tmp = pdir / "upload.part"
+    tmp.unlink(missing_ok=True)
+    path.replace(tmp)
+    shutil.rmtree(pdir / "import", ignore_errors=True)
+    filename = f"{path.stem if path.stem != 'import' else 'video'}{path.suffix.lower()}"
+    if title:
+        safe = "".join(ch for ch in title if ch not in '\\/:*?"<>|\n\r').strip()[:100]
+        if safe:
+            filename = safe + path.suffix.lower()
+    svc.install_source(db, st, p["id"], tmp, filename, size, info)
+    finish(db, job, {"filename": filename, "duration": info["duration"], "title": title})
+
+
+HANDLERS = {"analyze": handle_analyze, "export": handle_export, "import": handle_import}
 
 
 def run_one(db: Db, st: Settings) -> bool:

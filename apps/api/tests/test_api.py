@@ -295,3 +295,90 @@ def test_cors_and_health(server):
                                                           "Access-Control-Request-Headers": "authorization"})
     assert r.headers.get("access-control-allow-origin") == "http://localhost:3000"
     assert requests.get(server.base + "/healthz").json()["status"] == "ok"
+
+
+# ------------------------------------------------------------------ import from a link (YouTube etc.)
+def test_import_url_rejects_unsafe_links(server, monkeypatch):
+    from app import downloader
+    monkeypatch.setattr(downloader, "available", lambda: True)
+    c = server.signup()
+    pid = c.post("/v1/projects", {"name": "x"}).json()["id"]
+    for bad in ["ftp://example.com/v.mp4", "file:///etc/passwd", "http://localhost/v.mp4", "http://127.0.0.1/v.mp4",
+                "http://169.254.169.254/latest/meta-data", "http://192.168.1.5/a.mp4", "http://[::1]/a.mp4",
+                "https://user:pw@example.com/v.mp4", "https://example.com:8080/v.mp4", "not a url at all"]:
+        r = c.post(f"/v1/projects/{pid}/source-url", {"url": bad})
+        assert r.status_code == 422 and r.json()["error"]["code"] == "URL_INVALID", (bad, r.text)
+    assert c.post(f"/v1/projects/{pid}/source-url", {}).status_code == 422
+    other = server.signup("b@example.com")
+    assert other.post(f"/v1/projects/{pid}/source-url", {"url": "https://example.com/v.mp4"}).status_code in (403, 404)
+
+
+def test_import_url_unavailable_without_ytdlp(server, monkeypatch):
+    from app import downloader
+    monkeypatch.setattr(downloader, "available", lambda: False)
+    monkeypatch.setattr(downloader, "validate_url", lambda u, resolve=True: u)
+    c = server.signup()
+    pid = c.post("/v1/projects", {"name": "x"}).json()["id"]
+    r = c.post(f"/v1/projects/{pid}/source-url", {"url": "https://www.youtube.com/watch?v=abc"})
+    assert r.status_code == 503 and r.json()["error"]["code"] == "DOWNLOAD_UNAVAILABLE"
+
+
+def test_import_url_downloads_then_analyze_works(server, video_bytes, srt_text, monkeypatch):
+    from app import downloader
+    calls = []
+
+    def fake_download(url, dest, max_minutes, max_bytes, hook=None):
+        calls.append((url, max_minutes))
+        dest.mkdir(parents=True, exist_ok=True)
+        f = dest / "import.mp4"
+        f.write_bytes(video_bytes)
+        hook and hook(0.5)
+        return f, "حلقة: عن الإنتاجية / نصائح"
+
+    monkeypatch.setattr(downloader, "available", lambda: True)
+    monkeypatch.setattr(downloader, "validate_url", lambda u, resolve=True: u)
+    monkeypatch.setattr(downloader, "download", fake_download)
+    c = server.signup()
+    pid = c.post("/v1/projects", {"name": "من يوتيوب"}).json()["id"]
+    j = c.post(f"/v1/projects/{pid}/source-url", {"url": "https://www.youtube.com/watch?v=abc123"})
+    assert j.status_code == 202 and j.json()["kind"] == "import" and j.json()["status"] == "queued"
+    assert c.post(f"/v1/projects/{pid}/source-url", {"url": "https://www.youtube.com/watch?v=abc123"}).json()["id"] == j.json()["id"]
+    assert c.get("/v1/me").json()["minutes_remaining"] == 120                       # downloading is free
+    server.drain()
+    done = c.get(f"/v1/jobs/{j.json()['id']}").json()
+    assert done["status"] == "done" and done["progress"] == 1 and calls == [("https://www.youtube.com/watch?v=abc123", 180)]
+    proj = c.get(f"/v1/projects/{pid}").json()
+    assert proj["status"] == "ready" and proj["source"]["width"] == 1280
+    assert "/" not in proj["source"]["filename"] and proj["source"]["filename"].endswith(".mp4") and "حلقة" in proj["source"]["filename"]
+    assert c.get(f"/v1/projects/{pid}/media").status_code == 200                      # streamable like an upload
+    r = c.req("PUT", f"/v1/projects/{pid}/subtitles", data=srt_text.encode("utf-8"))
+    assert r.status_code == 200
+    a = c.post(f"/v1/projects/{pid}/analyze", {"max_clips": 5})
+    assert a.status_code == 202
+    server.drain()
+    assert c.get(f"/v1/jobs/{a.json()['id']}").json()["status"] == "done"
+
+
+def test_import_url_failure_is_reported_and_nothing_charged(server, monkeypatch):
+    from app import downloader
+
+    def boom(*a, **k):
+        raise downloader.DownloadError("DOWNLOAD_FAILED", "HTTP Error 403: Forbidden")
+
+    monkeypatch.setattr(downloader, "available", lambda: True)
+    monkeypatch.setattr(downloader, "validate_url", lambda u, resolve=True: u)
+    monkeypatch.setattr(downloader, "download", boom)
+    c = server.signup()
+    pid = c.post("/v1/projects", {"name": "x"}).json()["id"]
+    j = c.post(f"/v1/projects/{pid}/source-url", {"url": "https://www.youtube.com/watch?v=zzz"}).json()
+    server.drain()
+    done = c.get(f"/v1/jobs/{j['id']}").json()
+    assert done["status"] == "error" and done["error"]["code"] == "DOWNLOAD_FAILED" and "تنزيل" in done["error"]["message_ar"]
+    assert c.get(f"/v1/projects/{pid}").json()["source"] is None
+    assert c.get("/v1/me").json()["minutes_remaining"] == 120
+
+
+def test_validate_url_accepts_public_hosts():
+    from app import downloader
+    assert downloader.validate_url("https://www.youtube.com/watch?v=abc", resolve=False).startswith("https://www.youtube.com")
+    assert downloader.validate_url("http://93.184.216.34/video.mp4")                  # public literal IP

@@ -41,7 +41,7 @@ export interface JobError {
 
 export interface Job {
   id: string;
-  kind: "analyze" | "export";
+  kind: "analyze" | "export" | "import";
   status: "queued" | "running" | "done" | "error" | "canceled";
   progress: number;
   stage: string;
@@ -165,6 +165,8 @@ export interface Backend {
   getProject(id: string): Promise<Project>;
   deleteProject(id: string): Promise<void>;
   uploadSource(pid: string, file: File, onProgress?: (f: number) => void): Promise<Project>;
+  /** Queue a download of the source video from a public link (YouTube etc.); resolves with the import job. */
+  importUrl(pid: string, url: string): Promise<Job>;
   uploadSubtitles(pid: string, text: string): Promise<void>;
   analyze(pid: string, maxClips: number): Promise<Job>;
   watchJob(jobId: string, cb: (j: Job) => void): () => void;

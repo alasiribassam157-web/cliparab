@@ -13,6 +13,7 @@
 | GET/POST | `/projects` | |
 | GET/DELETE | `/projects/{id}` | يحتوي `active_job_id` |
 | POST | `/projects/{id}/source?filename=` | جسم الطلب = الملف الخام (بث) |
+| POST | `/projects/{id}/source-url` | `{url}` ← `202` + job من نوع `import`؛ ينزّل الفيديو من رابط عام (يوتيوب وغيره عبر yt-dlp) ويثبّته كمصدر. روابط https عامة فقط (يُرفض localhost والعناوين الخاصة)، `503 DOWNLOAD_UNAVAILABLE` إن لم يكن yt-dlp مثبّتًا، `422 DOWNLOAD_FAILED` إن فشل التنزيل. التنزيل مجاني؛ الدقائق تُحجز عند `analyze` |
 | PUT | `/projects/{id}/subtitles` | نص SRT/VTT؛ يتجاوز التفريغ |
 | POST | `/projects/{id}/analyze` | `202` + job · يدعم `Idempotency-Key` · يحجز الدقائق |
 | GET | `/jobs/{id}` · `/jobs/{id}/events` (SSE) · `DELETE /jobs/{id}` يلغي المنتظِر ويستردّ |

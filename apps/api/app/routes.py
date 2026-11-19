@@ -23,6 +23,7 @@ from cliparab_core.models import Transcript
 from cliparab_core.render import EditState
 from cliparab_core.subtitles import parse_subtitles
 
+from . import downloader
 from . import schemas as S
 from . import services as svc
 from .config import Settings
@@ -238,20 +239,27 @@ def build_routes(ctx: Ctx) -> list[Route]:
         if info["duration"] > st.max_source_minutes * 60:
             tmp.unlink(missing_ok=True)
             raise ApiError("TOO_LONG", {"max_minutes": st.max_source_minutes})
-        old = source_of(p["id"])
-        if old:  # replacing the source invalidates every derived artifact
-            Path(old["path"]).unlink(missing_ok=True)
-            for f in pdir.iterdir():
-                if f.name not in ("upload.part",) and f.is_file():
-                    f.unlink(missing_ok=True)
-            db.run("DELETE FROM suggestions WHERE project_id=?", p["id"])
-            db.run("DELETE FROM sources WHERE project_id=?", p["id"])
-        final = pdir / f"source{ext}"
-        tmp.replace(final)
-        db.run("INSERT INTO sources(id,project_id,filename,path,size_bytes,duration,width,height,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
-               new_id("s_"), p["id"], filename, str(final), size, info["duration"], info["width"], info["height"], now())
-        touch(p["id"], "ready")
+        svc.install_source(db, st, p["id"], tmp, filename, size, info)
         return JSONResponse(svc.public_project(db.one("SELECT * FROM projects WHERE id=?", p["id"]), source_of(p["id"])), status_code=201)
+
+    @endpoint
+    async def import_source_url(request: Request) -> Response:
+        """Queue a download of the source video from a public link (YouTube etc.); poll the returned job."""
+        u = user_of(request)
+        p = own_project(u, request.path_params["pid"])
+        b = await parse(request, S.SourceUrl)
+        try:
+            url = downloader.validate_url(b.url)
+        except downloader.DownloadError as e:
+            raise ApiError(e.code, e.detail) from None
+        if not downloader.available():
+            raise ApiError("DOWNLOAD_UNAVAILABLE")
+        active = db.one("SELECT * FROM jobs WHERE project_id=? AND kind='import' AND status IN ('queued','running')", p["id"])
+        if active:
+            return JSONResponse(svc.public_job(active), status_code=200)
+        job = create_job(u, "import", p["id"], {"url": url}, 0.0)
+        audit(u["id"], "source.import_url", {"project": p["id"], "host": url.split("/")[2]})
+        return JSONResponse(svc.public_job(job), status_code=202)
 
     @endpoint
     async def upload_subtitles(request: Request) -> Response:
@@ -564,6 +572,7 @@ def build_routes(ctx: Ctx) -> list[Route]:
         Route("/v1/projects", projects, methods=["GET", "POST"]),
         Route("/v1/projects/{pid}", project, methods=["GET", "DELETE"]),
         Route("/v1/projects/{pid}/source", upload_source, methods=["POST"]),
+        Route("/v1/projects/{pid}/source-url", import_source_url, methods=["POST"]),
         Route("/v1/projects/{pid}/subtitles", upload_subtitles, methods=["PUT", "POST"]),
         Route("/v1/projects/{pid}/media", source_media, methods=["GET"]),
         Route("/v1/projects/{pid}/transcript", transcript, methods=["GET"]),

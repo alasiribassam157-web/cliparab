@@ -59,6 +59,7 @@ function jobView(d: DemoData, id: string): Job {
   const frac = Math.min(1, (Date.now() - j.started) / j.ms);
   let stage = "done";
   if (j.kind === "analyze") stage = frac < 0.12 ? "probe" : frac < 0.5 ? "transcribe" : frac < 0.7 ? "segment" : frac < 0.92 ? "score" : frac < 1 ? "preview" : "done";
+  else if (j.kind === "import") stage = frac < 1 ? "download" : "done";
   else stage = frac < 1 ? "render" : "done";
   return { id, kind: j.kind, status: frac >= 1 ? "done" : "running", progress: frac, stage, project_id: j.project_id, result: null, error: null };
 }
@@ -133,6 +134,17 @@ export function createDemoBackend(): Backend {
       for (let i = 1; i <= 5; i++) { onProgress?.(i / 5); await sleep(120); }
       p.source = { filename: f.filename, duration: f.duration, width: f.width, height: f.height, size_bytes: 1_264_175, has_subtitles: false };
       p.status = "ready"; save(d); return p;
+    },
+    async importUrl(pid, url) {
+      const d = state(); const p = projectOf(d, pid); const f = await loadFile();
+      try { const u = new URL(url); if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error("scheme"); }
+      catch { throw new ApiException(422, "URL_INVALID", "الرابط غير صالح. استخدم رابط فيديو عامًا يبدأ بـ https.", "Invalid video link. Use a public https link."); }
+      p.source = { filename: f.filename, duration: f.duration, width: f.width, height: f.height, size_bytes: 1_264_175, has_subtitles: false };
+      p.status = "ready";
+      const id = uid("dj_");
+      d.jobs[id] = { id, kind: "import", started: Date.now(), ms: 1500, project_id: pid };
+      save(d);
+      return jobView(d, id);
     },
     async uploadSubtitles(pid) { const d = state(); projectOf(d, pid).source!.has_subtitles = true; save(d); },
     async analyze(pid) {

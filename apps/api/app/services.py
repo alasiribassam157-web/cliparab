@@ -121,3 +121,22 @@ def purge_expired(db: Db, settings: Settings) -> dict:
         n_exports += 1
     db.run("DELETE FROM idempotency WHERE created_at < ?", (datetime.now(timezone.utc) - timedelta(days=2)).isoformat(timespec="seconds"))
     return {"projects": n_projects, "exports": n_exports}
+
+
+# ---------------------------------------------------------------- sources
+def install_source(db: Db, settings: Settings, project_id: str, tmp: Path, filename: str, size: int, info: dict) -> None:
+    """Make ``tmp`` the project's source (replacing any old one and everything derived from it)."""
+    pdir = settings.project_dir(project_id)
+    old = db.one("SELECT * FROM sources WHERE project_id=?", project_id)
+    if old:  # replacing the source invalidates every derived artifact
+        Path(old["path"]).unlink(missing_ok=True)
+        for f in pdir.iterdir():
+            if f.name not in ("upload.part",) and f.is_file() and f != tmp:
+                f.unlink(missing_ok=True)
+        db.run("DELETE FROM suggestions WHERE project_id=?", project_id)
+        db.run("DELETE FROM sources WHERE project_id=?", project_id)
+    final = pdir / f"source{Path(filename).suffix.lower()}"
+    tmp.replace(final)
+    db.run("INSERT INTO sources(id,project_id,filename,path,size_bytes,duration,width,height,created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+           new_id("s_"), project_id, filename, str(final), size, info["duration"], info["width"], info["height"], now())
+    db.run("UPDATE projects SET status='ready', updated_at=? WHERE id=?", now(), project_id)

@@ -43,6 +43,10 @@ class ProjectCreate(BaseModel):
     retention_days: int | None = Field(default=None, ge=1, le=365)
 
 
+class SourceUrl(BaseModel):
+    url: str = Field(min_length=8, max_length=2048)
+
+
 class AnalyzeRequest(BaseModel):
     max_clips: int = Field(default=8, ge=1, le=20)
     min_duration: float = Field(default=15, ge=5, le=60)

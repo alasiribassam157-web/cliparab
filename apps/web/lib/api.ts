@@ -71,6 +71,7 @@ export function createLiveBackend(base: string): Backend {
         xhr.send(file);
       });
     },
+    importUrl: (pid, url) => call<Job>("POST", `/v1/projects/${pid}/source-url`, { url }),
     uploadSubtitles: async (pid, text) => { await call("PUT", `/v1/projects/${pid}/subtitles`, undefined, { "Content-Type": "text/plain; charset=utf-8" }, text); },
     analyze: (pid, maxClips) => call<Job>("POST", `/v1/projects/${pid}/analyze`, { max_clips: maxClips }, { "Idempotency-Key": `an-${pid}-${Date.now() >> 12}` }),
     watchJob(jobId, cb) {
