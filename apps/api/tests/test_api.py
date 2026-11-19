@@ -62,6 +62,11 @@ def test_full_flow_upload_analyze_edit_export_download(server, video_bytes, srt_
     assert c.get(f"/v1/projects/{pid}/transcript").json()["segments"]
     assert (server.settings.project_dir(pid) / "proxy.mp4").exists()
 
+    th = c.get(f"/v1/projects/{pid}/suggestions/{items[0]['id']}/thumb")
+    assert th.status_code == 200 and th.headers["content-type"] == "image/jpeg" and th.content[:2] == b"\xff\xd8"
+    assert (server.settings.project_dir(pid) / "thumbs" / f"{items[0]['id']}.jpg").exists()
+    assert c.get(f"/v1/projects/{pid}/suggestions/sg_nope/thumb").status_code == 404
+
     clip = c.post(f"/v1/projects/{pid}/clips", {"suggestion_id": items[0]["id"]})
     assert clip.status_code == 201
     clip = clip.json()
@@ -183,7 +188,7 @@ def test_other_users_cannot_see_or_touch_my_data(server, video_bytes, srt_text):
     eid = a.post(f"/v1/clips/{cid}/exports", {"resolution": "720p"}).json()["export"]["id"]
     server.drain()
     for method, path in [("GET", f"/v1/projects/{pid}"), ("DELETE", f"/v1/projects/{pid}"), ("GET", f"/v1/projects/{pid}/suggestions"),
-                         ("GET", f"/v1/projects/{pid}/media"), ("GET", f"/v1/jobs/{jid}"), ("GET", f"/v1/clips/{cid}"),
+                         ("GET", f"/v1/projects/{pid}/media"), ("GET", f"/v1/projects/{pid}/suggestions/{sid}/thumb"), ("GET", f"/v1/jobs/{jid}"), ("GET", f"/v1/clips/{cid}"),
                          ("GET", f"/v1/exports/{eid}"), ("GET", f"/v1/exports/{eid}/file"), ("POST", f"/v1/clips/{cid}/exports")]:
         r = b.req(method, path, json={} if method == "POST" else None)
         assert r.status_code == 404, (method, path, r.status_code)

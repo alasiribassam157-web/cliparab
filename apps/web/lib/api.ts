@@ -86,6 +86,7 @@ export function createLiveBackend(base: string): Backend {
     suggestions: async (pid) => (await call<{ items: Suggestion[] }>("GET", `/v1/projects/${pid}/suggestions`)).items,
     transcript: (pid) => call<Transcript>("GET", `/v1/projects/${pid}/transcript`),
     mediaUrl: (pid) => withToken(`/v1/projects/${pid}/media`),
+    thumbUrl: (pid, sid) => withToken(`/v1/projects/${pid}/suggestions/${sid}/thumb`),
     createClip: (pid, suggestion_id) => call<Clip>("POST", `/v1/projects/${pid}/clips`, { suggestion_id }),
     getClip: (id) => call<Clip>("GET", `/v1/clips/${id}`),
     patchClip: (id, version, patch) => call<Clip>("PATCH", `/v1/clips/${id}`, patch, { "If-Match": String(version) }),

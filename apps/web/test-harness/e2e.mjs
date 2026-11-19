@@ -48,6 +48,9 @@ try {
   await page.waitForSelector('[data-testid="clip-card"]', { timeout: 30000 });
   const cards = await page.locator('[data-testid="clip-card"]').count();
   check("suggestions listed (>=3)", cards >= 3, `count=${cards}`);
+  await page.waitForFunction(() => [...document.querySelectorAll(".clip-thumb img")].every((i) => i.complete && i.naturalWidth > 0), null, { timeout: 8000 }).catch(() => {});
+  const thumbs = await page.locator(".clip-thumb img").evaluateAll((els) => els.map((i) => [i.naturalWidth, i.naturalHeight]));
+  check("every suggestion shows a real vertical frame", thumbs.length === cards && thumbs.every(([w, h]) => w > 100 && h > w), JSON.stringify(thumbs));
   await page.getByRole("button", { name: "لماذا هذا المقطع؟" }).first().click();
   check("score breakdown shows 6 bars", (await page.locator(".bar").count()) === 6);
   await shot("04-suggestions");

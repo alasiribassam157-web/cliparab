@@ -361,6 +361,26 @@ def build_routes(ctx: Ctx) -> list[Route]:
         rows = db.all("SELECT * FROM suggestions WHERE project_id=? ORDER BY rank", p["id"])
         return JSONResponse({"items": [svc.public_suggestion(r) for r in rows]})
 
+    @endpoint
+    async def suggestion_thumb(request: Request) -> Response:
+        """Vertical 9:16 poster of the best-looking frame of a suggested clip (cached on disk)."""
+        u = user_of(request, allow_query_token=True)
+        p = own_project(u, request.path_params["pid"])
+        sid = request.path_params["sid"]
+        row = db.one("SELECT * FROM suggestions WHERE id=? AND project_id=?", sid, p["id"])
+        src = source_of(p["id"])
+        if not row or not src:
+            raise ApiError("NOT_FOUND")
+        out = st.project_dir(p["id"]) / "thumbs" / f"{sid}.jpg"
+        if not out.exists():
+            out.parent.mkdir(parents=True, exist_ok=True)
+            d = svc.public_suggestion(row)
+            try:
+                await anyio.to_thread.run_sync(media.make_thumbnail, src["path"], float(d["start"]), float(d["end"]), str(out))
+            except media.MediaError:
+                raise ApiError("NOT_FOUND") from None
+        return FileResponse(out, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
     # ------------------------------------------------------------------ clips
     def validated_edit_state(es_dict: dict, duration: float) -> dict:
         try:
@@ -541,6 +561,7 @@ def build_routes(ctx: Ctx) -> list[Route]:
         Route("/v1/projects/{pid}/transcript", transcript, methods=["GET"]),
         Route("/v1/projects/{pid}/analyze", analyze, methods=["POST"]),
         Route("/v1/projects/{pid}/suggestions", suggestions, methods=["GET"]),
+        Route("/v1/projects/{pid}/suggestions/{sid}/thumb", suggestion_thumb, methods=["GET"]),
         Route("/v1/projects/{pid}/clips", clips, methods=["GET", "POST"]),
         Route("/v1/jobs/{jid}", job, methods=["GET", "DELETE"]),
         Route("/v1/jobs/{jid}/events", job_events, methods=["GET"]),

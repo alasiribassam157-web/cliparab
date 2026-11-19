@@ -16,6 +16,7 @@ function ClipCard({ s, pid, onEdit, busy }: { s: Suggestion; pid: string; onEdit
   const backend = useBackend();
   const [why, setWhy] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [thumbOk, setThumbOk] = useState(true);
   const vref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -30,6 +31,14 @@ function ClipCard({ s, pid, onEdit, busy }: { s: Suggestion; pid: string; onEdit
 
   return (
     <article className="card clip-card" data-testid="clip-card">
+      <div className="clip-thumb" aria-hidden={!thumbOk}>
+        {thumbOk ? (
+          <img src={backend.thumbUrl(pid, s.id)} alt={s.title} loading="lazy" onError={() => setThumbOk(false)} />
+        ) : (
+          <span className="clip-thumb-fallback">▶</span>
+        )}
+        <span className="clip-thumb-time" dir="ltr">{fmtDuration(s.duration)}</span>
+      </div>
       <ScoreRing value={s.total} />
       <div>
         <div className="row spread" style={{ alignItems: "flex-start" }}>

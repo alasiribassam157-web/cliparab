@@ -157,6 +157,7 @@ export function createDemoBackend(): Backend {
     async suggestions(pid) { const d = state(); const p = projectOf(d, pid); return p.status === "done" ? (await loadFile()).suggestions : []; },
     async transcript() { return (await loadFile()).transcript; },
     mediaUrl: () => "/demo/source.mp4",
+    thumbUrl: (_pid, sid) => `/demo/${sid}.jpg`,
     async createClip(pid, suggestionId) {
       const d = state(); projectOf(d, pid);
       const s = (await loadFile()).suggestions.find((x) => x.id === suggestionId);

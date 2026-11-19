@@ -157,3 +157,75 @@ def _track_faces(src: str, start: float, end: float, step: float) -> list[tuple[
         t += step
     cap.release()
     return out
+
+
+# --------------------------------------------------------------------------- thumbnails
+def _frame_quality(frame) -> tuple[float, float | None]:
+    """Score a BGR frame in [0, ~3]: sharp, well exposed, contrasty, with a face if one is visible.
+
+    Returns ``(score, face_cx)`` where ``face_cx`` is the normalised x of the largest face (or ``None``).
+    """
+    import cv2
+
+    h, w = frame.shape[:2]
+    small = cv2.resize(frame, (320, max(1, int(h * 320 / w))))
+    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    sharp = min(float(cv2.Laplacian(gray, cv2.CV_64F).var()) / 300.0, 1.0)
+    mean = float(gray.mean()) / 255.0
+    exposure = max(0.0, 1.0 - abs(mean - 0.45) / 0.45)  # best around mid-tones; black/white frames score 0
+    contrast = min(float(gray.std()) / 64.0, 1.0)
+    cx = None
+    face = 0.0
+    try:
+        xml = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
+        casc = cv2.CascadeClassifier(xml) if os.path.exists(xml) else None
+        if casc is not None and not casc.empty():
+            faces = casc.detectMultiScale(gray, 1.15, 5, minSize=(28, 28))
+            if len(faces):
+                x, y, fw, fh = max(faces, key=lambda f: f[2] * f[3])
+                cx = float((x + fw / 2) / gray.shape[1])
+                face = 1.0
+    except Exception:  # noqa: BLE001 - faces are a bonus, never required
+        pass
+    return 0.9 * sharp + 1.0 * exposure + 0.6 * contrast + 0.8 * face, cx
+
+
+def best_frame_time(src: str, start: float, end: float, samples: int = 9) -> tuple[float, float]:
+    """Pick the best-looking moment inside ``[start, end]``; returns ``(t_absolute, subject_cx)``.
+
+    Candidates are spread over the clip but skip the first/last 10% (fades, cuts) and are
+    ranked by :func:`_frame_quality`. Falls back to the middle of the clip when opencv is missing.
+    """
+    mid = (start + end) / 2
+    try:
+        import cv2
+    except ImportError:
+        return mid, 0.5
+    cap = cv2.VideoCapture(src)
+    span = max(end - start, 0.1)
+    best, best_t, best_cx = -1.0, mid, 0.5
+    for i in range(samples):
+        t = start + span * (0.1 + 0.8 * (i + 0.5) / samples)
+        cap.set(cv2.CAP_PROP_POS_MSEC, t * 1000)
+        ok, frame = cap.read()
+        if not ok:
+            continue
+        score, cx = _frame_quality(frame)
+        score -= 0.15 * abs(t - mid) / (span / 2)  # mild preference for the heart of the clip
+        if score > best:
+            best, best_t, best_cx = score, t, 0.5 if cx is None else cx
+    cap.release()
+    return best_t, best_cx
+
+
+def make_thumbnail(src: str, start: float, end: float, out_jpg: str, width: int = 540) -> float:
+    """Write a vertical 9:16 JPEG of the best frame in the clip, cropped around the subject. Returns the time used."""
+    info = probe(src)
+    t, cx = best_frame_time(src, start, end)
+    sw, sh = info["width"], info["height"]
+    height = int(width * 16 / 9) // 2 * 2
+    cw = min(sw, int(sh * 9 / 16) // 2 * 2)
+    x = int(min(max(cx * sw - cw / 2, 0), sw - cw))
+    _run(["ffmpeg", "-v", "error", "-y", "-ss", f"{t:.3f}", "-i", src, "-frames:v", "1",
+          "-vf", f"crop={cw}:{sh}:{x}:0,scale={width}:{height}", "-q:v", "3", out_jpg])
+    return t

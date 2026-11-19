@@ -105,3 +105,21 @@ def test_edit_state_validation_and_word_override(video_path, srt_path, tmp_path)
     es = EditState(start=0.8, end=12.0, resolution="720p", reframe_mode="center", words=custom, loudnorm=False)
     render_clip(str(video_path), es, tr.words(), str(tmp_path / "o.mp4"), str(tmp_path / "w"))
     assert "معدلة" in (tmp_path / "w" / "captions.ass").read_text(encoding="utf-8")
+
+
+def test_make_thumbnail_is_vertical_and_skips_blank_frames(tmp_path):
+    import subprocess
+
+    from cliparab_core import media
+
+    # 4s black lead-in, then 6s of a bright box on gray: the thumbnail must come from the content part.
+    src = tmp_path / "s.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=640x360:r=10:d=4",
+                    "-f", "lavfi", "-i", "color=c=0x606060:s=640x360:r=10:d=6", "-filter_complex",
+                    "[0][1]concat=n=2:v=1[v];[v]drawbox=x=400:y=100:w=120:h=160:color=white:t=fill:enable='gte(t,4)'[o]",
+                    "-map", "[o]", "-pix_fmt", "yuv420p", str(src)], check=True)
+    out = tmp_path / "t.jpg"
+    t = media.make_thumbnail(str(src), 0.0, 10.0, str(out), width=270)
+    assert t >= 4.0
+    w, h = media.probe(str(out))["width"], media.probe(str(out))["height"]
+    assert (w, h) == (270, 480)

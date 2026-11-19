@@ -165,6 +165,7 @@ export interface Backend {
   suggestions(pid: string): Promise<Suggestion[]>;
   transcript(pid: string): Promise<Transcript>;
   mediaUrl(pid: string): string;
+  thumbUrl(pid: string, suggestionId: string): string;
   createClip(pid: string, suggestionId: string): Promise<Clip>;
   getClip(id: string): Promise<Clip>;
   patchClip(id: string, version: number, patch: { title?: string; edit_state?: Partial<EditState> }): Promise<Clip>;
