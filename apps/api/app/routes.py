@@ -249,7 +249,7 @@ def build_routes(ctx: Ctx) -> list[Route]:
         p = own_project(u, request.path_params["pid"])
         b = await parse(request, S.SourceUrl)
         try:
-            url = downloader.validate_url(b.url)
+            url = await anyio.to_thread.run_sync(downloader.validate_url, b.url)
         except downloader.DownloadError as e:
             raise ApiError(e.code, e.detail) from None
         if not downloader.available():

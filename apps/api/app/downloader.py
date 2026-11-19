@@ -19,6 +19,18 @@ from urllib.parse import urlsplit
 MEDIA_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".mp3", ".wav", ".m4a"}
 
 
+def hint(msg: str) -> str:
+    """Short operator hint for the failures people actually hit; the raw yt-dlp text is kept after it."""
+    low = msg.lower()
+    if "confirm you" in low and "bot" in low or "sign in" in low:
+        return "site asked for sign-in / bot check: set YTDLP_COOKIES_FILE. " + msg[:240]
+    if "javascript runtime" in low or "n challenge" in low or "ejs" in low:
+        return "YouTube needs a JS runtime (Deno) + yt-dlp[default]. " + msg[:240]
+    if "private video" in low or "members-only" in low or "drm" in low:
+        return "private or protected video. " + msg[:240]
+    return msg[:300]
+
+
 class DownloadError(Exception):
     """``code`` is an ApiError code: URL_INVALID, DOWNLOAD_UNAVAILABLE, DOWNLOAD_FAILED or TOO_LONG."""
 
@@ -35,6 +47,8 @@ def _is_public(ip: str) -> bool:
 def validate_url(url: str, resolve: bool = True) -> str:
     """Return the cleaned URL or raise DownloadError('URL_INVALID')."""
     url = (url or "").strip()
+    if not url or any(ch.isspace() or ord(ch) < 32 for ch in url):
+        raise DownloadError("URL_INVALID", "whitespace or control characters")
     try:
         u = urlsplit(url)
         host = u.hostname or ""
@@ -115,7 +129,7 @@ def download(url: str, dest: Path, max_minutes: int, max_bytes: int, hook: Calla
             msg = str(e)
             if "too long" in msg:
                 raise DownloadError("TOO_LONG", msg[:200]) from None
-            raise DownloadError("DOWNLOAD_FAILED", msg[:300]) from None
+            raise DownloadError("DOWNLOAD_FAILED", hint(msg)) from None
         if not info or info.get("_type") == "playlist" and not info.get("entries"):
             raise DownloadError("DOWNLOAD_FAILED", "nothing downloaded")
         if info.get("_type") == "playlist":
@@ -133,7 +147,7 @@ def download(url: str, dest: Path, max_minutes: int, max_bytes: int, hook: Calla
         except subprocess.TimeoutExpired:
             raise DownloadError("DOWNLOAD_FAILED", "timeout") from None
         if r.returncode != 0:
-            raise DownloadError("DOWNLOAD_FAILED", (r.stderr or "")[-300:])
+            raise DownloadError("DOWNLOAD_FAILED", hint((r.stderr or "")[-400:]))
         title = (r.stdout.strip().splitlines() or [""])[0][:160]
     else:
         raise DownloadError("DOWNLOAD_UNAVAILABLE", "yt-dlp is not installed")

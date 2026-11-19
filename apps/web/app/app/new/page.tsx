@@ -51,19 +51,25 @@ export default function NewProject() {
     setBusy(true);
     setErr("");
     setFrac(0);
+    let createdId: string | null = null;
+    let hasSource = false;
     try {
       const fallback = source === "url" ? (locale === "ar" ? "فيديو من رابط" : "Video from link") : file?.name || "مشروع";
       const p = await backend.createProject(name.trim() || fallback, "ar");
+      createdId = p.id;
       if (source === "url") {
         const job = await backend.importUrl(p.id, url.trim());
         await waitForJob(backend, job.id, setFrac);
       } else {
         await backend.uploadSource(p.id, file ?? new File([], "demo.mp4"), setFrac);
       }
+      hasSource = true;
       if (srt) await backend.uploadSubtitles(p.id, await srt.text());
       await backend.analyze(p.id, 8);
       router.push(`/app/p/${p.id}`);
     } catch (ex) {
+      // A failed upload/download must not leave an empty project in the list. (Once the source is in, keep it so the user can retry.)
+      if (createdId && !hasSource) await backend.deleteProject(createdId).catch(() => undefined);
       setErr(errorText(ex, locale));
       setBusy(false);
     }
