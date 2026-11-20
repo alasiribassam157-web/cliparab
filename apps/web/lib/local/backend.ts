@@ -158,7 +158,7 @@ export function createLocalBackend(): Backend {
 
     // 3) suggestions
     report("score", 0.82);
-    let sug: LocalSuggestion[] = suggestClips({ spans, duration, maxClips, rmsDb: env.length ? env : null, peaks: energyPeaks(env) });
+    let sug: LocalSuggestion[] = suggestClips({ spans, duration, maxClips, lang: isRtl(segments.map((x) => x.text).join(" ")) ? "ar" : "en", rmsDb: env.length ? env : null, peaks: energyPeaks(env) });
     if (!sug.length) throw new Fail("NO_CLIPS", "الكلام في الفيديو قصير جدًا لاقتراح مقاطع (نحتاج جملًا متصلة مدتها 15 ثانية على الأقل).", "The speech is too short to suggest clips (we need at least 15 s of connected sentences).");
 
     // 4) best frame + subject centre per clip, visual score, thumbnails

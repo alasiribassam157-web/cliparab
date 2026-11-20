@@ -22,6 +22,7 @@ const END_PUNCT = [".", "!", "؟", "?", "…", "؛"];
 const DIGITS: Record<string, string> = Object.fromEntries([..."٠١٢٣٤٥٦٧٨٩"].map((c, i) => [c, String(i)]).concat([..."۰۱۲۳۴۵۶۷۸۹"].map((c, i) => [c, String(i)])));
 
 export function normalize(text: string): string {
+  if (LANG === "en") return text.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/[^\p{L}\p{N}'\s]/gu, " ").replace(/\s+/g, " ").trim();
   return text.replace(TASHKEEL, "").replace(/[أإآ]/g, "ا").replace(/ى/g, "ي").replace(/ة/g, "ه").replace(/[٠-٩۰-۹]/g, (c) => DIGITS[c] ?? c);
 }
 export const stripEdges = (w: string) => w.replace(PUNCT_EDGE, "");
@@ -51,7 +52,44 @@ export const CLIP_TYPE_LABELS_AR: Record<string, string> = {
   quote: "اقتباس", short: "قصير جدًا", marketing: "مناسب لإعلان أو تسويق",
 };
 
-const containsAny = (n: string, markers: string[]) => markers.reduce((a, m) => a + (n.includes(m) ? 1 : 0), 0);
+
+// ------------------------------------------------------------------------------------------ language lexicons
+interface Lex {
+  DANGLING_START: Set<string>; DANGLING_PREFIX_BASE: Set<string>; INCOMPLETE_END: Set<string>; QUESTION_WORDS: Set<string>;
+  POWER: string[]; CURIOSITY: string[]; FILLER_START: Set<string>; VALUE: string[]; CONCLUSION: string[]; STORY: string[];
+  OPINION: string[]; COMEDY: string[]; QUOTE: string[]; MARKETING: string[]; STOPWORDS: Set<string>; TRANSITIONS: string[]; NUM_WORDS: Set<string>;
+  minEmphasisLen: number;
+}
+const AR_LEX: Lex = { DANGLING_START, DANGLING_PREFIX_BASE, INCOMPLETE_END, QUESTION_WORDS, POWER, CURIOSITY, FILLER_START, VALUE, CONCLUSION, STORY, OPINION, COMEDY, QUOTE, MARKETING, STOPWORDS, TRANSITIONS, NUM_WORDS, minEmphasisLen: 5 };
+const EN_LEX: Lex = {
+  DANGLING_START: set("and but so because which then also or however therefore thus yet plus those these he she they them his her their its"),
+  DANGLING_PREFIX_BASE: new Set(),
+  INCOMPLETE_END: set("and but or so because that which who whom whose the a an of to in on for with by at from as if than then like about into my your our their his her its this these those is are was were be been am will would can could should may might have has had do does did not no very really just also too more most"),
+  QUESTION_WORDS: set("what why how who whom whose when where which is are do does did can could would should will have has isn't aren't don't doesn't didn't can't"),
+  POWER: ["secret", "secrets", "mistake", "mistakes", "never", "nobody", "truth", "warning", "danger", "dangerous", "biggest", "worst", "shocking", "insane", "crazy", "huge", "destroy", "destroyed", "killed", "wrong", "lie", "lies", "myth", "myths", "stop", "dont", "don't", "banned", "illegal", "exposed", "hidden", "nobody tells you", "no one tells you", "the real reason", "game changer"],
+  CURIOSITY: ["everyone thinks", "most people", "what if", "imagine", "here's the thing", "the truth is", "you won't believe", "the reason", "turns out", "but here's", "nobody talks about", "what nobody", "the difference", "think about", "wait", "listen", "guess what", "the problem is", "here's why", "let me explain"],
+  FILLER_START: set("um uh uhm hmm er ah oh well okay ok yeah alright anyway like so"),
+  VALUE: ["you need", "you should", "you have to", "step", "steps", "tip", "tips", "rule", "because", "for example", "for instance", "the way", "how to", "learn", "works", "result", "means", "key", "the trick", "simple", "easy", "so that", "that's why", "which means", "important", "reason", "method", "strategy", "lesson", "mistake"],
+  CONCLUSION: ["in short", "bottom line", "the point is", "the key is", "that's why", "so basically", "in the end", "to sum up", "remember", "at the end of the day", "that's it", "the takeaway", "the lesson", "so if you", "and that's", "that is why"],
+  STORY: ["story", "one day", "i was", "i remember", "years ago", "when i was", "i used to", "happened", "back then", "we were", "it was", "this one time", "i got", "so i"],
+  OPINION: ["i think", "i believe", "in my opinion", "i disagree", "i don't think", "i feel", "honestly", "i'd say", "to me", "overrated", "unpopular opinion", "i personally"],
+  COMEDY: ["haha", "lol", "funny", "joke", "laugh", "laughing", "hilarious", "ridiculous", "😂"],
+  QUOTE: ["quote", "they say", "as the saying", "famous", "proverb", "wise man"],
+  MARKETING: ["discount", "offer", "buy now", "sale", "subscribe", "link below", "sign up", "book now", "order now", "limited time", "free trial", "promo", "check out", "use code", "coupon", "link in the description"],
+  STOPWORDS: set("the a an and or but if of to in on for with by at from as is are was were be been am it its this that these those i you he she we they me him her us them my your his our their not no so very just also too then than there here what which who when where how why do does did have has had can could would should will would may might about into over out up down more most some any all each other such only own same can't don't won't it's that's i'm you're we're they're he's she's there's going get got really like yeah okay"),
+  TRANSITIONS: ["subscribe", "thanks for watching", "see you next", "next video", "like and subscribe", "before we move on", "moving on", "let's move on", "next topic", "in the next", "welcome back", "hey guys", "what's up guys", "don't forget to", "smash that", "link in the description", "thank you for watching", "thanks for listening", "sponsor", "sponsored by"],
+  NUM_WORDS: set("one two three four five six seven eight nine ten twenty thirty fifty hundred thousand million billion first second third"),
+  minEmphasisLen: 6,
+};
+let LANG: "ar" | "en" = "ar";
+let L: Lex = AR_LEX;
+export function setEngineLang(l: "ar" | "en") { LANG = l; L = l === "en" ? EN_LEX : AR_LEX; }
+export const engineLang = () => LANG;
+
+const containsAny = (n: string, markers: string[]) => {
+  if (LANG === "en") { const p = ` ${n} `; return markers.reduce((a, m) => a + (p.includes(` ${m} `) ? 1 : 0), 0); }
+  return markers.reduce((a, m) => a + (n.includes(m) ? 1 : 0), 0);
+};
 const endsSentence = (w: string) => END_PUNCT.some((p) => w.replace(/["'») ]+$/, "").endsWith(p));
 
 export function splitSentences(words: Word[], gap = 0.8, minWords = 4, maxWords = 45): Sentence[] {
@@ -90,39 +128,39 @@ export function startsDangling(text: string): boolean {
   const toks = normTokens(text);
   if (!toks.length) return true;
   const f = toks[0];
-  if (DANGLING_START.has(f)) return true;
-  if ((f.startsWith("و") || f.startsWith("ف")) && DANGLING_PREFIX_BASE.has(f.slice(1))) return true;
-  if (f.startsWith("و") && f.length >= 4 && !WAW_ROOTS.some((r) => f.startsWith(r))) return true;
-  return FILLER_START.has(f) && toks.length <= 3;
+  if (L.DANGLING_START.has(f)) return true;
+  if (LANG === "ar" && (f.startsWith("و") || f.startsWith("ف")) && L.DANGLING_PREFIX_BASE.has(f.slice(1))) return true;
+  if (LANG === "ar" && f.startsWith("و") && f.length >= 4 && !WAW_ROOTS.some((r) => f.startsWith(r))) return true;
+  return L.FILLER_START.has(f) && toks.length <= 3;
 }
 export function endsIncomplete(text: string): boolean {
   const s = text.trimEnd();
   if (["،", ",", ":", "-", "..."].some((p) => s.endsWith(p))) return true;
   const toks = normTokens(text);
-  return !toks.length || INCOMPLETE_END.has(toks[toks.length - 1]);
+  return !toks.length || L.INCOMPLETE_END.has(toks[toks.length - 1]);
 }
-export const isTransition = (text: string) => { const n = normalize(text); return TRANSITIONS.some((t) => n.includes(t)); };
+export const isTransition = (text: string) => { const n = normalize(text); return L.TRANSITIONS.some((t) => n.includes(t)); };
 export function isQuestion(text: string): boolean {
   if (text.includes("؟") || text.includes("?")) return true;
   const t = normTokens(text);
-  return t.length > 0 && QUESTION_WORDS.has(t[0]);
+  return t.length > 0 && L.QUESTION_WORDS.has(t[0]);
 }
 export function hookStrength(first: string): number {
   const n = normalize(first);
   const toks = n.split(/\s+/).filter(Boolean);
   let s = 0.15;
   if (isQuestion(first)) s += 0.3;
-  if (/\d/.test(n) || toks.slice(0, 12).some((t) => NUM_WORDS.has(t))) s += 0.15;
-  if (containsAny(n, POWER)) s += 0.25;
-  if (containsAny(n, CURIOSITY)) s += 0.15;
+  if (/\d/.test(n) || toks.slice(0, 12).some((t) => L.NUM_WORDS.has(t))) s += 0.15;
+  if (containsAny(n, L.POWER)) s += 0.25;
+  if (containsAny(n, L.CURIOSITY)) s += 0.15;
   if (toks.length >= 3 && toks.length <= 14) s += 0.1;
-  if (toks.length && FILLER_START.has(toks[0])) s -= 0.2;
+  if (toks.length && L.FILLER_START.has(toks[0])) s -= 0.2;
   if (toks.length > 28) s -= 0.1;
   return Math.max(0, Math.min(1, s));
 }
 export function valueStrength(text: string): number {
   const n = normalize(text);
-  const hits = containsAny(n, VALUE) + containsAny(n, CONCLUSION) + containsAny(n, STORY) + containsAny(n, OPINION);
+  const hits = containsAny(n, L.VALUE) + containsAny(n, L.CONCLUSION) + containsAny(n, L.STORY) + containsAny(n, L.OPINION);
   const digits = (n.match(/\d+/g) ?? []).length;
   const words = Math.max(n.split(/\s+/).filter(Boolean).length, 1);
   const density = Math.min(1, (hits + 0.5 * digits) / Math.max(3, words / 12));
@@ -131,7 +169,7 @@ export function valueStrength(text: string): number {
 export function conclusionStrength(last: string): number {
   const n = normalize(last);
   let s = 0.35;
-  if (containsAny(n, CONCLUSION)) s += 0.35;
+  if (containsAny(n, L.CONCLUSION)) s += 0.35;
   if (/[.!؟?]$/.test(last.trimEnd())) s += 0.2;
   if (n.split(/\s+/).filter(Boolean).length >= 6) s += 0.1;
   if (endsIncomplete(last)) s -= 0.45;
@@ -139,12 +177,12 @@ export function conclusionStrength(last: string): number {
 }
 export function classifyClip(text: string, duration: number, hook: number): string {
   const n = normalize(text);
-  if (containsAny(n, COMEDY) >= 1) return "comedy";
-  if (containsAny(n, MARKETING) >= 2) return "marketing";
-  if (containsAny(n, STORY) >= 2) return "story";
-  if (containsAny(n, OPINION) >= 1) return "opinion";
-  if (containsAny(n, QUOTE) >= 1 && duration <= 30) return "quote";
-  if (containsAny(n, VALUE) >= 2) return "educational";
+  if (containsAny(n, L.COMEDY) >= 1) return "comedy";
+  if (containsAny(n, L.MARKETING) >= 2) return "marketing";
+  if (containsAny(n, L.STORY) >= 2) return "story";
+  if (containsAny(n, L.OPINION) >= 1) return "opinion";
+  if (containsAny(n, L.QUOTE) >= 1 && duration <= 30) return "quote";
+  if (containsAny(n, L.VALUE) >= 2) return "educational";
   if (hook >= 0.7) return "viral";
   return duration <= 20 ? "short" : "educational";
 }
@@ -152,7 +190,7 @@ export function emphasisWords(text: string, n = 4): string[] {
   const seen: string[] = [];
   const toks = text.split(/\s+/).map(stripEdges);
   for (const t of toks) if (/\d/.test(normalize(t)) && !seen.includes(t)) seen.push(t);
-  const content = toks.filter((t) => t && !STOPWORDS.has(normalize(t)) && normalize(t).length >= 5 && !/\d/.test(normalize(t)));
+  const content = toks.filter((t) => t && !L.STOPWORDS.has(normalize(t)) && normalize(t).length >= L.minEmphasisLen && !/\d/.test(normalize(t)));
   content.sort((a, b) => normalize(b).length - normalize(a).length);
   for (const t of content) { if (seen.length >= n) break; if (!seen.includes(t)) seen.push(t); }
   return seen.slice(0, n);
@@ -160,13 +198,14 @@ export function emphasisWords(text: string, n = 4): string[] {
 
 // ------------------------------------------------------------------------------------------ topics
 function lightStem(t: string): string {
+  if (LANG === "en") return t.length > 4 ? t.replace(/(ing|ed|ly|es|s)$/, "") : t;
   for (const p of ["وال", "بال", "لل", "فال", "كال", "ال", "و", "ب", "ل"]) if (t.startsWith(p) && t.length - p.length >= 3) { t = t.slice(p.length); break; }
   for (const s of ["ات", "ون", "ين", "ان", "ه", "ها", "هم", "ي"]) if (t.endsWith(s) && t.length - s.length >= 3) { t = t.slice(0, -s.length); break; }
   return t;
 }
 function bag(ss: Sentence[]): Map<string, number> {
   const m = new Map<string, number>();
-  for (const s of ss) for (const t of normTokens(s.text)) if (!STOPWORDS.has(t) && t.length > 2) { const k = lightStem(t); m.set(k, (m.get(k) ?? 0) + 1); }
+  for (const s of ss) for (const t of normTokens(s.text)) if (!L.STOPWORDS.has(t) && t.length > 2) { const k = lightStem(t); m.set(k, (m.get(k) ?? 0) + 1); }
   return m;
 }
 function cos(a: Map<string, number>, b: Map<string, number>): number {
@@ -223,8 +262,13 @@ function generateCandidates(ss: Sentence[], duration: number, minD = 15, maxD = 
       seen.add(key);
       const f = [...flags];
       if (fwd) f.push(`end_repaired:${fwd}`);
+      // start on the first real word: skip "um, so, well…" at the very beginning (never leaves fewer than 5 words)
+      const ws = ss[i].words;
+      let lead = 0;
+      while (lead < 3 && ws.length - lead > 5 && L.FILLER_START.has(normTokens(ws[lead].text)[0] ?? "")) lead++;
+      if (lead) f.push(`lead_trimmed:${lead}`);
       out.push({
-        start: Math.max(0, ss[i].start - 0.15), end: Math.min(ss[jj].end + 0.25, duration || Infinity), first: i, last: jj,
+        start: Math.max(0, (lead ? ws[lead].start : ss[i].start) - 0.15), end: Math.min(ss[jj].end + 0.25, duration || Infinity), first: i, last: jj,
         text: ss.slice(i, jj + 1).map((s) => s.text).join(" "), flags: f, chapter: 0,
         scores: { hook: 0, complete: 0, value: 0, audio: 0, visual: 0, engage: 0 }, penalties: {}, total: 0,
         clip_type: "", title: "", reason_ar: "", hooks: [], emphasis: [],
@@ -254,7 +298,9 @@ function paceRates(words: Word[], window = 20): number[] {
   return pop;
 }
 const titleFrom = (text: string, limit = 8) => {
-  const words = text.replace(/؟/g, "؟.").split(".")[0].trim().split(/\s+/).filter(Boolean);
+  const words = text.replace(/؟/g, "؟.").split(/(?<=[.!?])\s|\.(?=\s|$)/)[0].trim().split(/\s+/).filter(Boolean);
+  while (words.length > 5 && L.FILLER_START.has(normTokens(words[0])[0] ?? "")) words.shift();
+  if (LANG === "en" && words[0]) words[0] = words[0][0].toUpperCase() + words[0].slice(1);
   return words.slice(0, limit).join(" ") + (words.length > limit ? "…" : "");
 };
 function reasonAr(hook: number, comp: number, value: number, type: string, flags: string[]): string {
@@ -311,7 +357,9 @@ function scoreCandidate(c: Candidate, ss: Sentence[], rates: number[], rmsDb: nu
   }
   if (sents.some((s) => isTransition(s.text))) pen.transition_phrase = 10;
   c.penalties = pen;
-  const raw = (Object.keys(WEIGHTS) as ScoreKey[]).reduce((a, k) => a + WEIGHTS[k] * c.scores[k], 0) - Math.min(40, Object.values(pen).reduce((a, b) => a + b, 0));
+  const arc = isQuestion(first) && sents.length >= 2 && conclusionStrength(last) >= 0.55 ? 4 : 0; // a question that gets answered
+  if (arc) c.flags.push("qa_arc");
+  const raw = arc + (Object.keys(WEIGHTS) as ScoreKey[]).reduce((a, k) => a + WEIGHTS[k] * c.scores[k], 0) - Math.min(40, Object.values(pen).reduce((a, b) => a + b, 0));
   c.total = Math.round(Math.max(0, Math.min(100, raw)) * 10) / 10;
   c.reason_ar = reasonAr(hook, complete, value, c.clip_type, c.flags);
   return c;
@@ -325,13 +373,21 @@ function passes(c: Candidate, minTotal: number): boolean {
   return c.total >= minTotal;
 }
 const overlap = (a: Candidate, b: Candidate) => Math.max(0, Math.min(a.end, b.end) - Math.max(a.start, b.start)) / Math.max(Math.min(a.end - a.start, b.end - b.start), 1e-6);
+const topicSet = (c: Candidate) => new Set(normTokens(c.text).filter((t) => t.length > 2 && !L.STOPWORDS.has(t)).map(lightStem));
+function jaccard(a: Set<string>, b: Set<string>): number {
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter++;
+  return inter / Math.max(1, a.size + b.size - inter);
+}
 function diversify(cands: Candidate[], limit: number): Candidate[] {
   const pool = [...cands].sort((a, b) => b.total - a.total);
+  const sets = new Map<Candidate, Set<string>>();
+  const setOf = (c: Candidate) => { let x = sets.get(c); if (!x) { x = topicSet(c); sets.set(c, x); } return x; };
   const chosen: Candidate[] = [];
   while (pool.length && chosen.length < limit) {
     let best = -1, bestVal = -1e9;
     pool.forEach((c, idx) => {
-      if (chosen.some((s) => overlap(c, s) > 0.3)) return;
+      if (chosen.some((s) => overlap(c, s) > 0.3 || jaccard(setOf(c), setOf(s)) > 0.55)) return;
       const red = Math.max(0, ...chosen.map((s) => overlap(c, s)));
       const chap = 0.08 * chosen.filter((s) => s.chapter === c.chapter).length * 100;
       const val = 0.75 * c.total - 25 * red - chap;
@@ -348,6 +404,8 @@ export interface AnalyzeInput {
   spans: Word[][];
   duration: number;
   maxClips: number;
+  /** Language of the speech: selects the lexicons (hooks, fillers, conclusions…). Default Arabic. */
+  lang?: "ar" | "en";
   /** RMS level in dB per 0.5 s of the whole source (optional). */
   rmsDb?: number[] | null;
   /** Times (s) of loudness peaks; clips that contain one get a small engagement bonus. */
@@ -356,6 +414,7 @@ export interface AnalyzeInput {
 
 /** Full analysis: sentences → chapters → candidates → ClipScore → filters → MMR. Returns ranked suggestions. */
 export function suggestClips(inp: AnalyzeInput): Suggestion[] {
+  setEngineLang(inp.lang ?? "ar");
   const all: { c: Candidate; ss: Sentence[] }[] = [];
   let chapterBase = 0;
   const allWords = inp.spans.flat();

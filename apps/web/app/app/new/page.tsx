@@ -28,7 +28,7 @@ export default function NewProject() {
   const backend = useBackend();
   const router = useRouter();
   const [name, setName] = useState("");
-  const [lang, setLang] = useState("auto");
+  const [lang, setLang] = useState("ar");
   const [source, setSource] = useState<"file" | "url">("file");
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -114,8 +114,7 @@ export default function NewProject() {
       )}
       <label className="field">{t("lang_label")}
         <select className="input" value={lang} onChange={(e) => setLang(e.target.value)} disabled={busy} data-testid="lang">
-          <option value="auto">{t("lang_auto")}</option><option value="ar">العربية</option><option value="en">English</option><option value="fr">Français</option>
-          <option value="es">Español</option><option value="tr">Türkçe</option><option value="ur">اردو</option><option value="hi">हिन्दी</option><option value="id">Bahasa Indonesia</option>
+          <option value="ar">العربية</option><option value="en">English</option>
         </select>
         <span className="small muted" style={{ fontWeight: 400 }}>{t("lang_note")}</span>
       </label>
