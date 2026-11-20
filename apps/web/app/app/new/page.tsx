@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { Progress } from "@/components/ui";
 import { errorText, useBackend } from "@/lib/backend";
 import { useI18n } from "@/lib/i18n";
 import { sampleFiles } from "@/lib/local/backend";
+import { isPhoneOrTablet } from "@/lib/local/asr";
 import { ApiException, type Backend, type Job } from "@/lib/types";
 
 /** Resolves when the job finishes; rejects with the job's own (localised) error if it fails. */
@@ -47,6 +48,8 @@ export default function NewProject() {
   const local = backend.mode === "local";
   const missing = (backend.mode === "live" && (source === "file" ? !file : !url.trim())) || (local && (source === "url" || !file));
   const [sampling, setSampling] = useState(false);
+  const [phone, setPhone] = useState(false);
+  useEffect(() => setPhone(isPhoneOrTablet()), []);
   const pickSample = async () => {
     setSampling(true); setErr("");
     try { const f = await sampleFiles(); setFile(f.video); setSrt(f.srt); setSource("file"); if (!name) setName(locale === "ar" ? "حلقة نموذجية" : "Sample episode"); }
@@ -108,6 +111,7 @@ export default function NewProject() {
           <p className="small muted" style={{ margin: 0 }}>{t(local ? "url_local_note" : "url_hint")}</p>
         </div>
       )}
+      {local && phone && <div className="err" role="note" data-testid="phone-note">{t("phone_note")}</div>}
       {local && source === "file" && (
         <div className="row" style={{ gap: 8 }}>
           <button type="button" className="btn sm" onClick={pickSample} disabled={busy || sampling}>{sampling ? t("sample_loading") : t("try_sample")}</button>

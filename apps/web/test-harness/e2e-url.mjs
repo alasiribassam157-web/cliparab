@@ -34,6 +34,15 @@ try {
   check("SRT import gives clips without any speech model", n >= 2 && !requests.some((u) => u.includes("huggingface") || u.includes("jsdelivr")), `cards=${n} external=${requests.length}`);
   await page.getByRole("button", { name: "النص" }).click();
   check("transcript comes from the subtitle file", (await page.textContent("body")).includes("هل تعرف لماذا يفشل"));
+  // phone: clear note up front, and a clear message instead of a crash when there are no subtitles
+  const phone = await (await browser.newContext({ locale: "ar", userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 } })).newPage();
+  await phone.goto(base + "/app/new");
+  check("phone sees that speech analysis needs a computer", (await phone.locator('[data-testid="phone-note"]').textContent()).includes("كمبيوتر"));
+  await phone.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
+  await phone.locator("input.input").first().fill("phone");
+  await phone.getByRole("button", { name: "ابدأ التحليل" }).click();
+  await phone.waitForSelector(".err[role=alert]", { timeout: 60000 });
+  check("phone without SRT gets a clear Arabic reason, not a hang", (await phone.locator(".err[role=alert]").textContent()).includes("يحتاج كمبيوتر"));
 } catch (e) { check("exception", false, e.message); }
 check("no page errors", problems.length === 0, problems.join(" | "));
 await browser.close(); server.close();

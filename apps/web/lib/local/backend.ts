@@ -3,7 +3,7 @@
  * Source videos, thumbnails, transcripts and exports live in IndexedDB; small records in localStorage.
  */
 import { ApiException, type Backend, type Clip, type EditState, type ExportItem, type Job, type Project, type ReviewPage, type Suggestion, type Transcript, type User, type WordT } from "../types";
-import { transcribe } from "./asr";
+import { isPhoneOrTablet, transcribe } from "./asr";
 import { AudioUnsupported, energyPeaks, openAudio, pickSpans, type AudioSource } from "./audio";
 import { parseSubtitles, suggestClips, type Word } from "./engine";
 import { idbClear, idbDel, idbDelPrefix, idbGet, idbPut } from "./idb";
@@ -122,6 +122,7 @@ export function createLocalBackend(): Backend {
       spans = [segments.flatMap((s) => s.words)];
     } else {
       if (!audio) throw new Fail("AUDIO_UNSUPPORTED", "تعذّر قراءة صوت هذا الفيديو في المتصفح. جرّب ملف MP4 (H.264/AAC)، أو أرفق ملف ترجمة SRT.", "Could not read this video's audio in the browser. Try an MP4 (H.264/AAC) file, or attach an SRT subtitle file.");
+      if (isPhoneOrTablet()) throw new Fail("PHONE_NO_ASR", "تفريغ الكلام يحتاج كمبيوتر: متصفح الجوال لا يتحمّل نموذج التفريغ (250 ميجابايت) ويوقف العمل عند الخروج من الصفحة. افتح الموقع من كمبيوتر بمتصفح Chrome أو Edge، أو أرفق ملف ترجمة SRT للفيديو.", "Speech recognition needs a computer: phone browsers cannot hold the 250 MB speech model and stop work when you leave the page. Open the site on a computer with Chrome or Edge, or attach an SRT subtitle file.");
       engine = "whisper-browser";
       const picks = pickSpans(env, audio.duration || duration, TRANSCRIBE_BUDGET);
       const total = picks.reduce((a, [s, e]) => a + (e - s), 0) || 1;
@@ -236,13 +237,15 @@ export function createLocalBackend(): Backend {
       if (!isFinite(info.duration) || info.duration <= 0) throw new ApiException(415, "UNSUPPORTED_MEDIA", "تعذّر قراءة مدة الفيديو.", "Could not read the video duration.");
       onProgress?.(0.4);
       sources.set(pid, file);
-      let stored = true;
-      await idbPut(`src:${pid}`, file).catch(() => { stored = false; });
+      // keep a copy for later visits in the background; a big file must not hold up the analysis
+      void idbPut(`src:${pid}`, file).catch(() => {
+        const d = load(); const p = d.projects.find((x) => x.id === pid);
+        if (p) { p.last_error = { ar: "مساحة المتصفح لا تكفي لحفظ الفيديو؛ يعمل الآن، لكن ستحتاج رفعه مجددًا إذا أغلقت الصفحة.", en: "Not enough browser storage to keep the video; it works now but you will need to upload it again after closing the page." }; save(d); }
+      });
       onProgress?.(1);
       const d = load(); const p = projectOf(d, pid);
       p.source = { filename: file.name || "video.mp4", duration: info.duration, width: info.width || 16, height: info.height || 9, size_bytes: file.size, has_subtitles: false };
       p.status = "ready";
-      if (!stored) p.last_error = { ar: "مساحة المتصفح لا تكفي لحفظ الفيديو؛ سيعمل الآن، لكن ستحتاج رفعه مجددًا إذا أغلقت الصفحة.", en: "Not enough browser storage to keep the video; it works now but you will need to upload it again after closing the page." };
       save(d);
       return p;
     },

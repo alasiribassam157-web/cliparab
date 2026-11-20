@@ -17,6 +17,7 @@ self.onmessage = async (e) => {
   const { id, type } = e.data;
   try {
     if (type === "load") {
+      if (e.data.single) { env.backends.onnx.wasm.numThreads = 1; env.backends.onnx.wasm.proxy = false; }
       const opts = { device: e.data.device, progress_callback: (p) => self.postMessage({ id, type: "progress", p }) };
       opts.dtype = e.data.device === "webgpu" ? { encoder_model: "fp32", decoder_model_merged: "q4" } : "q8";
       asr = await pipeline("automatic-speech-recognition", e.data.model, opts);
@@ -61,7 +62,18 @@ class WhisperWorker {
   terminate() { this.w.terminate(); }
 }
 
+/**
+ * Phones and tablets: the 250 MB model and its working memory exceed what mobile browsers allow a tab (iOS kills
+ * the page), and the work stops as soon as the user switches apps. We say so up front instead of failing silently.
+ */
+export function isPhoneOrTablet(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
 let ready: Promise<WhisperWorker> | null = null;
+let speed = 1; // seconds of work per second of audio, learned from the last piece
 let device: "webgpu" | "wasm" | null = null;
 /** Which engine the loaded model runs on (null until loaded). */
 export const asrDevice = () => device;
@@ -76,11 +88,25 @@ async function load(onProgress: Progress): Promise<WhisperWorker> {
     files.forEach(([l, t]) => { a += l; b += t; });
     if (b) onProgress("model", a / b);
   };
-  const tryDevice = async (dev: "webgpu" | "wasm", model: string) => {
+  // A load that stops reporting for a long time is treated as failed (e.g. a WASM thread pool that never starts).
+  const tryLoad = async (single: boolean) => {
     const w = new WhisperWorker();
-    try { await w.call({ type: "load", device: dev, model }, [], report); return w; } catch (e) { w.terminate(); throw e; }
+    let last = Date.now();
+    let timer = 0;
+    const stalled = new Promise<never>((_, err) => {
+      timer = window.setInterval(() => { if (Date.now() - last > 150_000) err(new Error("model load stalled")); }, 5000);
+    });
+    try {
+      await Promise.race([w.call({ type: "load", device: "wasm", model: "onnx-community/whisper-small", single }, [], (p) => { last = Date.now(); report(p); }), stalled]);
+      return w;
+    } catch (e) { w.terminate(); throw e; } finally { clearInterval(timer); }
   };
-  const w = await tryDevice("wasm", "onnx-community/whisper-small");
+  let w: WhisperWorker;
+  try { w = await tryLoad(false); }
+  catch (e) {
+    console.warn("[cliparab] multi-threaded speech model failed, retrying single-threaded:", e);
+    w = await tryLoad(true);
+  }
   device = "wasm";
   return w;
 }
@@ -111,7 +137,13 @@ export async function transcribe(pcm: Float32Array, offset: number, onProgress: 
   const segs: AsrSegment[] = [];
   for (let i = 0; i < pcm.length; i += PIECE) {
     const piece = pcm.slice(i, i + PIECE);
-    const out = await w.call<{ text: string; chunks?: { timestamp: [number, number | null]; text: string }[] }>({ type: "run", pcm: piece, language }, [piece.buffer]);
+    // the model reports nothing while it works on a piece: move the bar on an estimate so it never looks frozen
+    const t0 = Date.now(), secs = piece.length / 16000;
+    const beat = window.setInterval(() => onProgress("transcribe", Math.min(1, (i + PIECE * Math.min(0.95, (Date.now() - t0) / 1000 / (secs * speed))) / pcm.length)), 2000);
+    let out: { text: string; chunks?: { timestamp: [number, number | null]; text: string }[] };
+    try { out = await w.call({ type: "run", pcm: piece, language }, [piece.buffer]); }
+    finally { clearInterval(beat); }
+    speed = Math.max(0.1, (Date.now() - t0) / 1000 / secs);
     segs.push(...clean(out.chunks ?? [{ timestamp: [0, piece.length / 16000], text: out.text }], offset + i / 16000, offset + pcm.length / 16000));
     onProgress("transcribe", Math.min(1, (i + PIECE) / pcm.length));
   }
