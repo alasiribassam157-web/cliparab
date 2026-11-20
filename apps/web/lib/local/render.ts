@@ -80,7 +80,7 @@ function drawHook(ctx: CanvasRenderingContext2D, W: number, H: number, es: EditS
   const bw = Math.min(maxW + fs, Math.max(...lines.map((l) => ctx.measureText(l).width)) + fs * 1.2), bh = lines.length * lh + fs * 0.7;
   const x = (W - bw) / 2, y = H * 0.08 + (1 - a) * -H * 0.02;
   const g = ctx.createLinearGradient(x, y, x + bw, y + bh);
-  const c1 = String(es.hook_c1 ?? "#22d3ee"), c2 = String(es.hook_c2 ?? "#a3e635");
+  const c1 = String(es.hook_c1 ?? "#ff4d2e"), c2 = String(es.hook_c2 ?? "#ffb84d");
   g.addColorStop(0, c1); g.addColorStop(1, c2);
   ctx.fillStyle = g;
   ctx.beginPath();

@@ -9,12 +9,12 @@ import { brandInit } from "@/lib/brand";
 const font = Tajawal({ subsets: ["arabic", "latin"], weight: ["400", "500", "700", "800"], display: "swap", variable: "--font-ui" });
 
 export const metadata: Metadata = {
-  title: "ClipArab — مقاطع قصيرة من فيديوهاتك الطويلة",
+  title: "Vyra — حوّل فيديوهاتك الطويلة إلى مقاطع تنتشر",
   description: "منصة عربية تحوّل الفيديو الطويل إلى مقاطع قصيرة جاهزة لـ TikTok وReels وShorts، بترجمة عربية سليمة ومجانًا بلا علامة مائية.",
   icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
-  appleWebApp: { capable: true, title: "ClipArab", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Vyra", statusBarStyle: "black-translucent" },
 };
-export const viewport: Viewport = { themeColor: "#05090d", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#0a0706", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 const themeInit = `try{var t=localStorage.getItem('cliparab.theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}`;
 

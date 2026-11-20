@@ -9,9 +9,11 @@ import type { ScoreKey, Suggestion } from "@/lib/types";
 
 export function Logo() {
   return (
-    <Link href="/" className="logo" aria-label="ClipArab">
-      <span className="logo-mark" aria-hidden>ك</span>
-      <span className="logo-word">كليب <b>عرب</b></span>
+    <Link href="/" className="logo" aria-label="Vyra">
+      <span className="logo-mark" aria-hidden>
+        <svg viewBox="0 0 32 32"><path d="M7 8h4.6L16 20.2 20.4 8H25l-6.8 17h-4.4z" fill="currentColor" /><circle cx="25" cy="24" r="2.6" fill="currentColor" opacity=".9" /></svg>
+      </span>
+      <span className="logo-word">VYRA</span>
     </Link>
   );
 }

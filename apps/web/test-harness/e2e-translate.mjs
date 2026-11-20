@@ -48,6 +48,14 @@ try {
   check("the translator received whole English sentences", Array.isArray(mt) && mt.length > 5 && mt.every((x) => /^[A-Z]/.test(x)), mt && mt.slice(0, 2).join(" | "));
   const titles = await page.locator(".clip-card h3").allTextContents();
   check("clip titles are Arabic", titles.length > 0 && titles.every((x) => /[؀-ۿ]/.test(x)), titles.slice(0, 2).join(" | "));
+  const dlP = page.waitForEvent("download", { timeout: 120000 }).catch(() => null);
+  await page.locator('[data-testid="dl-btn"]').first().click();
+  await page.waitForSelector('[data-testid="dl-link"], [data-testid="dl-box"] .err', { timeout: 120000 });
+  const dlEv = await dlP;
+  const href = await page.locator('[data-testid="dl-link"]').first().getAttribute("href").catch(() => "");
+  const dlName = await page.locator('[data-testid="dl-link"]').first().getAttribute("download").catch(() => "");
+  const dlSize = dlEv ? (await import("node:fs")).statSync(await dlEv.path()).size : 0;
+  check("one-tap download renders the clip and saves it (Arabic file name)", !!dlEv && dlSize > 50000 && href.startsWith("blob:") && /\.(mp4|webm)$/.test(dlName) && /[\u0600-\u06FF]/.test(dlName), `${dlName} ${dlSize} bytes`);
   check("project shows English → Arabic", (await page.textContent("body")).includes("ترجمة عربية"));
   await page.getByRole("button", { name: "تحرير" }).first().click();
   await page.waitForURL(/\/app\/c\//);

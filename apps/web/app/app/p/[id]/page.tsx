@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Breakdown, Progress, ScoreRing, statusChip } from "@/components/ui";
 import { errorText, useBackend } from "@/lib/backend";
+import type { ExportItem } from "@/lib/types";
 import { fmtDuration, fmtTime } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
 import type { Job, Project, Suggestion, Transcript } from "@/lib/types";
@@ -12,9 +13,27 @@ import { useUser } from "@/lib/user";
 const STAGES = ["probe", "transcribe", "segment", "score", "translate", "preview"] as const;
 
 function ClipCard({ s, pid, onEdit, busy, top }: { s: Suggestion; pid: string; onEdit: (s: Suggestion) => void; busy: boolean; top?: boolean }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const backend = useBackend();
   const [why, setWhy] = useState(false);
+  const [dl, setDl] = useState<{ p: number; url?: string; name?: string; err?: string } | null>(null);
+  const download = async () => {
+    setDl({ p: 0 });
+    try {
+      const clip = await backend.createClip(pid, s.id);
+      const r = await backend.exportClip(clip.id, "1080p");
+      const stop = backend.watchJob(r.job.id, async (j) => {
+        if (j.status === "error") { stop(); setDl({ p: 0, err: (locale === "ar" ? j.error?.message_ar : j.error?.message_en) || t("dl_fail") }); return; }
+        if (j.status !== "done") { setDl({ p: j.progress }); return; }
+        stop();
+        const e = await backend.getExport(r.export.id);
+        const url = backend.exportUrl(e, true);
+        const name = `${(s.title || "clip").replace(/[\\/:*?"<>|…#·]/g, "").trim().slice(0, 60) || "clip"}.${(e as ExportItem & { mime?: string }).mime === "video/webm" ? "webm" : "mp4"}`;
+        setDl({ p: 1, url, name });
+        const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      });
+    } catch (e) { setDl({ p: 0, err: errorText(e, locale) }); }
+  };
   const [preview, setPreview] = useState(false);
   const [thumbOk, setThumbOk] = useState(true);
   const vref = useRef<HTMLVideoElement>(null);
@@ -54,10 +73,18 @@ function ClipCard({ s, pid, onEdit, busy, top }: { s: Suggestion; pid: string; o
         </div>
         <p style={{ margin: "6px 0" }}>{s.reason_ar}</p>
         <div className="row">
-          <button className="btn primary sm" onClick={() => onEdit(s)} disabled={busy}>{t("edit")}</button>
+          <button className="btn primary sm" onClick={download} disabled={busy || (!!dl && !dl.err && !dl.url)} data-testid="dl-btn">⬇ {t("dl_clip")}</button>
+          <button className="btn sm" onClick={() => onEdit(s)} disabled={busy}>{t("edit")}</button>
           <button className="btn sm" onClick={() => setPreview((v) => !v)}>{t("preview_source")}</button>
           <button className="btn sm" onClick={() => setWhy((v) => !v)} aria-expanded={why}>{t("why_clip")}</button>
         </div>
+        {dl && (
+          <div className="dl-box" data-testid="dl-box">
+            {dl.err ? <div className="err" role="alert">{dl.err}</div>
+              : dl.url ? <a className="btn sm" href={dl.url} download={dl.name} data-testid="dl-link">✓ {t("dl_ready")}</a>
+              : <><span className="small muted">{t("dl_working")} {Math.round(dl.p * 100)}%</span><Progress value={dl.p} /></>}
+          </div>
+        )}
         {why && <Breakdown s={s} />}
         {preview && <video ref={vref} className="clip-video" src={backend.mediaUrl(pid)} controls playsInline />}
       </div>

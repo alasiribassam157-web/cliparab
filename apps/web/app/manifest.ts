@@ -1,10 +1,10 @@
 import type { MetadataRoute } from "next";
 
-/** Installable web app: "Add to Home screen" on phones opens ClipArab full-screen like a native app. */
+/** Installable web app: "Add to Home screen" on phones opens Vyra full-screen like a native app. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "ClipArab — مقاطع قصيرة من فيديوهاتك الطويلة",
-    short_name: "ClipArab",
+    name: "Vyra — مقاطع تنتشر من فيديوهاتك الطويلة",
+    short_name: "Vyra",
     description: "حوّل الفيديو الطويل إلى مقاطع قصيرة عمودية بترجمة عربية، مجانًا وداخل متصفحك.",
     start_url: "/app",
     scope: "/",
@@ -12,8 +12,8 @@ export default function manifest(): MetadataRoute.Manifest {
     orientation: "portrait",
     dir: "rtl",
     lang: "ar",
-    background_color: "#05090d",
-    theme_color: "#05090d",
+    background_color: "#0a0706",
+    theme_color: "#0a0706",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
