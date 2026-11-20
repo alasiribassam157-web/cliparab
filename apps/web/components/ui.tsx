@@ -23,7 +23,7 @@ function ThemeToggle() {
     try { setTheme((localStorage.getItem("cliparab.theme") as "light" | "dark") ?? ""); } catch { /* ignore */ }
   }, []);
   const toggle = () => {
-    const dark = theme ? theme === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const dark = theme ? theme === "dark" : true;
     const next = dark ? "light" : "dark";
     setTheme(next);
     document.documentElement.setAttribute("data-theme", next);

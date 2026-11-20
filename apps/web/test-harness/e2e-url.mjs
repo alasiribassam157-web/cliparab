@@ -20,11 +20,8 @@ const failures = [];
 const check = (n, ok, x = "") => { console.log((ok ? "PASS " : "FAIL ") + n + (x ? "  " + x : "")); if (!ok) failures.push(n); };
 try {
   await page.goto(base + "/app/new");
-  await page.getByRole("button", { name: "من رابط" }).click();
-  await page.locator('input[type="url"]').fill("https://www.youtube.com/watch?v=FPwTUVi7Qk4");
-  check("a YouTube link cannot be submitted in the free version", await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
-  check("and the page says why, in Arabic", (await page.textContent("form")).includes("يحتاج خادمًا مدفوعًا"));
-  await page.getByRole("button", { name: "رفع ملف" }).click();
+  check("the link tab is locked in the free version", await page.getByRole("button", { name: /من رابط/ }).isDisabled());
+  check("and the page says why, in Arabic", (await page.textContent("form")).includes("قريبًا"));
   await page.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
   await page.locator('input[type=file][accept*=".srt"]').setInputFiles(path.join(here, "sample.srt"));
   await page.getByRole("button", { name: "ابدأ التحليل" }).click();

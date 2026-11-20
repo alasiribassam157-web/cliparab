@@ -25,11 +25,13 @@ export default function Landing() {
   return (
     <Shell>
       <section className="hero">
+        <span className="eyebrow">{t("eyebrow")}</span>
         <h1>{t("hero_title")}</h1>
         <p>{t("hero_sub")}</p>
         <div className="row" style={{ justifyContent: "center" }}>
           <Link className="btn primary" href="/app/new">{t("start_now")}</Link>
         </div>
+        <div className="marquee" aria-hidden><div className="marquee-track">{[0, 1].flatMap((k) => ["TikTok", "Reels", "Shorts", "Snapchat", "9:16", "ترجمة عربية", "Karaoke", "ClipScore", "مجاني"].map((x) => <span key={`${k}${x}`}>{x}</span>))}</div></div>
         {sc && (
           <>
             <h2 style={{ marginTop: 36, marginBottom: 0, fontSize: "1.25rem" }}>{t("showcase_t")}</h2>
@@ -51,9 +53,10 @@ export default function Landing() {
         <p className="small muted" style={{ marginTop: 0 }}>{t("local_landing")}</p>
       </section>
 
-      <section className="grid4" style={{ marginBottom: 40 }}>
+      <section className="grid4" style={{ marginBottom: 56 }}>
         {[1, 2, 3, 4].map((i) => (
-          <div className="card" key={i}>
+          <div className="card" key={i} data-reveal style={{ "--d": `${i * 90}ms` } as React.CSSProperties}>
+            <div className="feat-ic" aria-hidden>{["✦", "✎", "◐", "⚡"][i - 1]}</div>
             <h3>{t(`f${i}_t`)}</h3>
             <p className="muted" style={{ margin: 0 }}>{t(`f${i}_d`)}</p>
           </div>
@@ -63,7 +66,7 @@ export default function Landing() {
       <section>
         <h2>{t("how_t")}</h2>
         <div className="steps">
-          {[1, 2, 3, 4].map((i) => <div className="card step" key={i}><b>{t(`s${i}`)}</b></div>)}
+          {[1, 2, 3, 4].map((i) => <div className="card step" key={i} data-reveal style={{ "--d": `${i * 90}ms` } as React.CSSProperties}><b>{t(`s${i}`)}</b></div>)}
         </div>
       </section>
       <p className="footer">{t("legal_note")}</p>

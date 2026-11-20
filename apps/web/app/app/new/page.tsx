@@ -93,7 +93,7 @@ export default function NewProject() {
       <label className="field">{t("project_name")}<input className="input" value={name} onChange={(e) => setName(e.target.value)} required={source === "file"} /></label>
       <div className="seg" role="group" aria-label={t("pick_video")}>
         <button type="button" aria-pressed={source === "file"} onClick={() => setSource("file")} disabled={busy}>{t("src_file")}</button>
-        <button type="button" aria-pressed={source === "url"} onClick={() => setSource("url")} disabled={busy}>{t("src_url")}</button>
+        <button type="button" aria-pressed={source === "url"} onClick={() => !local && setSource("url")} disabled={busy || local} aria-disabled={local} title={local ? t("soon") : undefined}>{t("src_url")}{local && <span className="soon-badge">{t("soon")}</span>}</button>
       </div>
       {source === "file" ? (
         <div className={`drop${over ? " over" : ""}`} role="button" tabIndex={0}
@@ -111,6 +111,7 @@ export default function NewProject() {
           <p className="small muted" style={{ margin: 0 }}>{t(local ? "url_local_note" : "url_hint")}</p>
         </div>
       )}
+      {local && source === "file" && <p className="small muted" style={{ margin: 0 }} data-testid="upload-first">{t("upload_first")}</p>}
       {local && phone && <div className="note" role="note" data-testid="phone-note">{t("phone_note")}</div>}
       {local && source === "file" && (
         <div className="row" style={{ gap: 8 }}>

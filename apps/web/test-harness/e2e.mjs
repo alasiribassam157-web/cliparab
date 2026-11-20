@@ -45,9 +45,8 @@ try {
   await page.goto(base + "/app/new");
   check("page is cross-origin isolated (multi-threaded speech model)", await page.evaluate(() => self.crossOriginIsolated === true));
   check("free in-browser banner", (await page.locator(".banner.ok").textContent()).includes("داخل متصفحك"));
-  await page.getByRole("button", { name: "من رابط" }).click();
-  check("link mode explains it needs a server and cannot submit", (await page.textContent("form")).includes("يحتاج خادمًا") && await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
-  await page.getByRole("button", { name: "رفع ملف" }).click();
+  check("link tab is locked and marked soon", await page.getByRole("button", { name: /من رابط/ }).isDisabled() && (await page.textContent(".seg")).includes("قريبًا"));
+  check("page says the video must be downloaded then uploaded", (await page.textContent("form")).includes("لازم تحمّل الفيديو"));
   check("cannot start without a file", await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
   await page.getByRole("button", { name: "شوف مثالًا حقيقيًا جاهزًا" }).click();
   await page.waitForURL(/\/app\/p\//, { timeout: 30000 });
