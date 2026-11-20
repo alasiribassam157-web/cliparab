@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/components/ui";
 import { errorText, useBackend } from "@/lib/backend";
 import { useI18n } from "@/lib/i18n";
 import { useUser } from "@/lib/user";
+import { BRAND_PRESETS, DEFAULT_BRAND, inkFor, readBrand, saveBrand, type Brand } from "@/lib/brand";
 
 export default function Settings() {
   const { t, locale, setLocale } = useI18n();
@@ -14,6 +15,9 @@ export default function Settings() {
   const { user, refresh } = useUser();
   const [err, setErr] = useState("");
   const [toast, say] = useToast();
+  const [brand, setBrand] = useState<Brand>(DEFAULT_BRAND);
+  useEffect(() => setBrand(readBrand()), []);
+  const pick = (b: Brand) => { setBrand(b); saveBrand(b); };
   if (!user) return null;
 
   const toggleTraining = async () => {
@@ -35,6 +39,22 @@ export default function Settings() {
       <div className="card stack">
         <b>{t("no_account_title")}</b>
         <span className="muted small">{t("device_note")}</span>
+      </div>
+      <div className="card stack" data-testid="brand">
+        <b>{t("brand_title")}</b>
+        <span className="muted small">{t("brand_hint")}</span>
+        <div className="brand-presets" role="group">
+          {BRAND_PRESETS.map((p) => (
+            <button key={p.en} type="button" className="brand-swatch" aria-pressed={p.v.a === brand.a && p.v.b === brand.b} onClick={() => pick(p.v)} title={locale === "ar" ? p.ar : p.en}
+              style={{ background: `linear-gradient(120deg, ${p.v.a}, ${p.v.b})` }} aria-label={locale === "ar" ? p.ar : p.en} />
+          ))}
+        </div>
+        <div className="row">
+          <label className="row small">{t("brand_a")}<input type="color" value={brand.a} onChange={(e) => pick({ ...brand, a: e.target.value })} aria-label={t("brand_a")} /></label>
+          <label className="row small">{t("brand_b")}<input type="color" value={brand.b} onChange={(e) => pick({ ...brand, b: e.target.value })} aria-label={t("brand_b")} /></label>
+          <button type="button" className="btn sm" onClick={() => { pick(DEFAULT_BRAND); say(t("saved")); }}>{t("brand_reset")}</button>
+        </div>
+        <div className="brand-preview" style={{ background: `linear-gradient(120deg, ${brand.a}, ${brand.b})`, color: inkFor(brand.a) }}>{t("brand_sample")}</div>
       </div>
       <div className="card stack">
         <b>{t("language")}</b>

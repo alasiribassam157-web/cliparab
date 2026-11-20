@@ -4,6 +4,7 @@ import "./globals.css";
 import { I18nProvider } from "@/lib/i18n";
 import { BackendProvider } from "@/lib/backend";
 import { Motion } from "@/components/Motion";
+import { brandInit } from "@/lib/brand";
 
 const font = Tajawal({ subsets: ["arabic", "latin"], weight: ["400", "500", "700", "800"], display: "swap", variable: "--font-ui" });
 
@@ -20,7 +21,7 @@ const themeInit = `try{var t=localStorage.getItem('cliparab.theme');if(t==='dark
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ar" dir="rtl" className={font.variable} suppressHydrationWarning>
-      <head><script dangerouslySetInnerHTML={{ __html: themeInit }} /></head>
+      <head><script dangerouslySetInnerHTML={{ __html: themeInit + brandInit }} /></head>
       <body>
         <div className="aurora" aria-hidden><i /><i /><i /></div>
         <Motion />

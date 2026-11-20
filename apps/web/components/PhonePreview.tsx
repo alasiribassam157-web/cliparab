@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { captionAt, chunkWords } from "@/lib/captions";
 import { clamp, fmtTime } from "@/lib/format";
+import { inkFor } from "@/lib/brand";
 import { useI18n } from "@/lib/i18n";
 import type { EditState, WordT } from "@/lib/types";
 
@@ -108,7 +109,7 @@ export function PhonePreview({ src, es, words, aspect }: Props) {
           </div>
         )}
         {es.hook !== false && !!es.hook_text && time - es.start < 2.8 && time >= es.start - 0.05 && (
-          <div className="hook-ban" dir={/[\u0600-\u06FF]/.test(String(es.hook_text)) ? "rtl" : "ltr"} data-testid="hook">{String(es.hook_text).replace(/…$/, "")}</div>
+          <div className="hook-ban" dir={/[\u0600-\u06FF]/.test(String(es.hook_text)) ? "rtl" : "ltr"} data-testid="hook" style={es.hook_c1 ? { background: `linear-gradient(120deg, ${es.hook_c1}, ${es.hook_c2 ?? es.hook_c1})`, color: inkFor(String(es.hook_c1)) } : undefined}>{String(es.hook_text).replace(/…$/, "")}</div>
         )}
         <div className="safe" aria-hidden />
       </div>

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect } from "react";
+import { applyBrand } from "@/lib/brand";
 
 /** Site-wide motion: scroll reveal for [data-reveal] and a cursor spotlight on .card. No effect with reduced motion. */
 export function Motion() {
   useEffect(() => {
     const root = document.documentElement;
+    applyBrand();
     root.classList.add("js");
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const io = new IntersectionObserver((entries) => {
