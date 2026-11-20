@@ -101,7 +101,7 @@ export async function renderClip(src: string, es: EditState, words: WordT[], onP
     analyser.fftSize = 2048;
     const gain = actx.createGain();
     const limiter = actx.createDynamicsCompressor();
-    limiter.threshold.value = -3; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.002; limiter.release.value = 0.12;
+    limiter.threshold.value = -6; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.001; limiter.release.value = 0.12;
     srcNode.connect(analyser);
     srcNode.connect(gain).connect(limiter).connect(dest);
     agc = mkAgc(analyser, gain);
