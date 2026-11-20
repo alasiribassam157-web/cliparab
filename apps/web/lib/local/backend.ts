@@ -411,15 +411,17 @@ export async function createSampleProject(backend: Backend): Promise<string> {
   localStorage.setItem(KEY, JSON.stringify(d));
   await idbPut(`sug:${p.id}`, sc.suggestions);
   await idbPut(`tr:${p.id}`, sc.transcript);
-  try {
-    const v = await openVideo(sc.source.preview_url);
-    for (const s of sc.suggestions) {
-      const t = s.start + (s.end - s.start) * 0.4;
-      const blob = await thumbnail(v, t, s.center ?? 0.5).catch(() => null);
-      if (blob) await idbPut(`thumb:${p.id}:${s.id}`, blob);
-    }
-    v.removeAttribute("src"); v.load();
-  } catch { /* thumbnails are optional */ }
+  // open straight away; thumbnails are drawn in the background and the page is told as each one lands
+  void (async () => {
+    try {
+      const v = await openVideo(sc.source.preview_url);
+      for (const s of sc.suggestions) {
+        const blob = await thumbnail(v, s.start + (s.end - s.start) * 0.4, s.center ?? 0.5).catch(() => null);
+        if (blob) { await idbPut(`thumb:${p.id}:${s.id}`, blob); window.dispatchEvent(new CustomEvent("cliparab:thumbs", { detail: p.id })); }
+      }
+      v.removeAttribute("src"); v.load();
+    } catch { /* thumbnails are optional */ }
+  })();
   return p.id;
 }
 

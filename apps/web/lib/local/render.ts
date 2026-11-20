@@ -91,7 +91,19 @@ export async function renderClip(src: string, es: EditState, words: WordT[], onP
   const actx = new AudioContext();
   await actx.resume().catch(() => undefined);
   const dest = actx.createMediaStreamDestination();
-  actx.createMediaElementSource(v).connect(dest); // not connected to the speakers: export is silent for the user
+  const srcNode = actx.createMediaElementSource(v); // not connected to the speakers: export is silent for the user
+  if (es.loudnorm !== false) {
+    // speech levelling: lift quiet recordings, keep loud ones from clipping (≈ the server's loudnorm)
+    const comp = actx.createDynamicsCompressor();
+    comp.threshold.value = -32; comp.knee.value = 12; comp.ratio.value = 5; comp.attack.value = 0.005; comp.release.value = 0.25;
+    const makeup = actx.createGain();
+    makeup.gain.value = 2.6;
+    const limiter = actx.createDynamicsCompressor();
+    limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.001; limiter.release.value = 0.1;
+    srcNode.connect(comp).connect(makeup).connect(limiter).connect(dest);
+  } else {
+    srcNode.connect(dest);
+  }
 
   await seek(v, es.start);
   drawFrame(ctx, v, W, H, es);

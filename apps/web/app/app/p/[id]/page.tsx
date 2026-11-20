@@ -77,6 +77,13 @@ export default function ProjectPage() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // thumbnails that are drawn after the page opened (sample project) show up as they land
+  useEffect(() => {
+    const onThumbs = (e: Event) => { if ((e as CustomEvent).detail === id) void backend.suggestions(id).then((s) => setItems([...s])); };
+    window.addEventListener("cliparab:thumbs", onThumbs);
+    return () => window.removeEventListener("cliparab:thumbs", onThumbs);
+  }, [backend, id]);
+
   // load project; follow the active job (or poll) while processing
   useEffect(() => {
     let alive = true;
