@@ -15,6 +15,8 @@ interface Candidate {
 }
 
 // ------------------------------------------------------------------------------------------ text_ar
+/** Speech language for the lexicons. Declared before anything that runs normalize() at module load. */
+let LANG: "ar" | "en" = "ar";
 const TASHKEEL = /[\u0610-\u061A\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g;
 const EDGE = "\\s\"'«»()\\[\\]{}،,؛;:.!؟?…\\-–—";
 const PUNCT_EDGE = new RegExp(`^[${EDGE}]+|[${EDGE}]+$`, "g");
@@ -81,7 +83,6 @@ const EN_LEX: Lex = {
   NUM_WORDS: set("one two three four five six seven eight nine ten twenty thirty fifty hundred thousand million billion first second third"),
   minEmphasisLen: 6,
 };
-let LANG: "ar" | "en" = "ar";
 let L: Lex = AR_LEX;
 export function setEngineLang(l: "ar" | "en") { LANG = l; L = l === "en" ? EN_LEX : AR_LEX; }
 export const engineLang = () => LANG;

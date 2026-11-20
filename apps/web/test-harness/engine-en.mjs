@@ -3,9 +3,14 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 const ESB = "/opt/npm-tools/node_modules/esbuild/bin/esbuild";
 execFileSync(ESB, ["../lib/local/engine.ts", "--bundle", "--format=esm", "--outfile=/tmp/engine.mjs", "--log-level=error"]);
+// production (Next/webpack) keeps let/const, so a variable used before its declaration crashes at load;
+// esbuild bundles hide that by turning top-level let/const into var. Load an unbundled copy to catch it.
+execFileSync(ESB, ["../lib/local/engine.ts", "--format=esm", "--outfile=/tmp/engine-strict.mjs", "--log-level=error"]);
+let strictOk = true; try { await import("/tmp/engine-strict.mjs"); } catch (e) { strictOk = false; console.log("strict load error:", e.message); }
 const { suggestClips, parseSubtitles } = await import("/tmp/engine.mjs");
 const failures = [];
 const check = (n, ok, x = "") => { console.log((ok ? "PASS " : "FAIL ") + n + (x ? "  " + x : "")); if (!ok) failures.push(n); };
+check("engine module loads with production let/const semantics", strictOk);
 
 // ~3 min English talk, 6 topics. Each sentence ~6 s.
 const topics = [
