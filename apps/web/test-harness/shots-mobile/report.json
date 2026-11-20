@@ -5,21 +5,21 @@
   "W": 390,
   "headerH": 57,
   "bad": [
-   "marquee-track [-49,1820]",
-   "SPAN [-49,39]",
-   "SPAN [354,421]",
-   "SPAN [435,554]",
-   "SPAN [568,666]",
-   "SPAN [680,785]",
-   "SPAN [799,879]",
-   "SPAN [893,980]",
-   "SPAN [994,1069]",
-   "SPAN [1083,1165]",
-   "SPAN [1179,1281]",
-   "SPAN [1295,1363]"
+   "marquee-track [-62,2081]",
+   "SPAN [-62,37]",
+   "SPAN [400,478]",
+   "SPAN [492,637]",
+   "SPAN [651,759]",
+   "SPAN [773,903]",
+   "SPAN [917,1003]",
+   "SPAN [1017,1116]",
+   "SPAN [1130,1218]",
+   "SPAN [1232,1331]",
+   "SPAN [1345,1464]",
+   "SPAN [1478,1557]"
   ],
   "small": [
-   "▶ClipArab 119x31"
+   "CLIPARAB 148x32"
   ]
  },
  {
@@ -29,7 +29,7 @@
   "headerH": 57,
   "bad": [],
   "small": [
-   "▶ClipArab 30x30"
+   "CLIPARAB 32x32"
   ]
  },
  {
@@ -39,7 +39,7 @@
   "headerH": 57,
   "bad": [],
   "small": [
-   "▶ClipArab 30x30"
+   "CLIPARAB 32x32"
   ]
  },
  {
@@ -49,7 +49,7 @@
   "headerH": 57,
   "bad": [],
   "small": [
-   "▶ClipArab 30x30"
+   "CLIPARAB 32x32"
   ]
  },
  {
@@ -59,7 +59,7 @@
   "headerH": 57,
   "bad": [],
   "small": [
-   "▶ClipArab 30x30"
+   "CLIPARAB 32x32"
   ]
  },
  {
@@ -69,7 +69,7 @@
   "headerH": 57,
   "bad": [],
   "small": [
-   "▶ClipArab 30x30"
+   "CLIPARAB 32x32"
   ]
  },
  {
@@ -81,7 +81,7 @@
    "tab [-32,46]"
   ],
   "small": [
-   "▶ClipArab 30x30",
+   "CLIPARAB 32x32",
    "seek 188x34",
    "البداية 316x34",
    "النهاية 316x34"
@@ -96,7 +96,7 @@
    "tab [-32,46]"
   ],
   "small": [
-   "▶ClipArab 30x30",
+   "CLIPARAB 32x32",
    "seek 188x34",
    "البداية 316x34",
    "النهاية 316x34"
@@ -111,7 +111,7 @@
    "tab [-32,46]"
   ],
   "small": [
-   "▶ClipArab 30x30",
+   "CLIPARAB 32x32",
    "seek 188x34"
   ]
  },
@@ -124,7 +124,7 @@
    "tab [-32,46]"
   ],
   "small": [
-   "▶ClipArab 30x30",
+   "CLIPARAB 32x32",
    "seek 188x34",
    "INPUT 22x22",
    "INPUT 316x34",
@@ -140,7 +140,7 @@
    "tab [-32,46]"
   ],
   "small": [
-   "▶ClipArab 30x30",
+   "CLIPARAB 32x32",
    "seek 188x34",
    "هل 41x36",
    "تعرف 58x36",
@@ -166,7 +166,7 @@
    "tab [356,421]"
   ],
   "small": [
-   "▶ClipArab 30x30",
+   "CLIPARAB 32x32",
    "seek 188x34"
   ]
  },
@@ -177,7 +177,7 @@
   "headerH": 57,
   "bad": [],
   "small": [
-   "▶ClipArab 30x30"
+   "CLIPARAB 32x32"
   ]
  },
  {
@@ -187,7 +187,7 @@
   "headerH": 57,
   "bad": [],
   "small": [
-   "▶ClipArab 30x30",
+   "CLIPARAB 32x32",
    "INPUT 22x22"
   ]
  }

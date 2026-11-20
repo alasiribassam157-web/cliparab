@@ -7,11 +7,22 @@ import { useBackend } from "@/lib/backend";
 import { useI18n } from "@/lib/i18n";
 import type { ScoreKey, Suggestion } from "@/lib/types";
 
+export function LogoMark({ id = "lg" }: { id?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden>
+      <defs><linearGradient id={id} x1="2" y1="2" x2="30" y2="30" gradientUnits="userSpaceOnUse"><stop stopColor="#22d3ee" /><stop offset="1" stopColor="#a3e635" /></linearGradient></defs>
+      <path d="M4 4h17l7 7v17H4z" fill={`url(#${id})`} />
+      <path d="M13 11.5v9l8-4.5z" fill="#031014" />
+      <path d="M21 4v7h7" fill="none" stroke="#031014" strokeOpacity=".45" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
 export function Logo() {
   return (
     <Link href="/" className="logo" aria-label="ClipArab">
-      <span className="logo-mark" aria-hidden>▶</span>
-      <span className="logo-word">ClipArab</span>
+      <span className="logo-mark" aria-hidden><LogoMark /></span>
+      <span className="logo-word">CLIP<b>ARAB</b></span>
     </Link>
   );
 }

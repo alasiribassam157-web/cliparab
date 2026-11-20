@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
   appleWebApp: { capable: true, title: "ClipArab", statusBarStyle: "black-translucent" },
 };
-export const viewport: Viewport = { themeColor: "#07060f", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#05090d", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 const themeInit = `try{var t=localStorage.getItem('cliparab.theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}`;
 
