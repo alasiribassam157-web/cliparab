@@ -18,7 +18,7 @@ const TRANSCRIBE_BUDGET = 10 * 60;
 type LocalSuggestion = Suggestion & { center?: number };
 interface State {
   user: User;
-  projects: (Project & { last_error?: { ar: string; en: string } | null })[];
+  projects: (Project & { last_error?: { ar: string; en: string } | null; remote_url?: string })[];
   clips: Clip[];
   exports: ExportItem[];
   jobs: Record<string, Job>;
@@ -300,7 +300,7 @@ export function createLocalBackend(): Backend {
     async transcript(pid) {
       return (await idbGet<Transcript>(`tr:${pid}`).catch(() => undefined)) ?? { language: "ar", engine: "none", segments: [] };
     },
-    mediaUrl: (pid) => { const b = sources.get(pid); return b ? objUrl(`src:${pid}`, b) : ""; },
+    mediaUrl: (pid) => { const b = sources.get(pid); if (b) return objUrl(`src:${pid}`, b); return load().projects.find((p) => p.id === pid)?.remote_url ?? ""; },
     thumbUrl: (pid, sid) => urls.get(`thumb:${pid}:${sid}`) ?? "",
     async createClip(pid, suggestionId) {
       const sug = (await idbGet<LocalSuggestion[]>(`sug:${pid}`)) ?? [];
@@ -325,15 +325,16 @@ export function createLocalBackend(): Backend {
     },
     async exportClip(cid, resolution) {
       const d = load(); const c = clipOf(d, cid);
-      const file = await sourceOf(c.project_id);
-      if (!file) throw new ApiException(409, "NO_SOURCE", "ملف الفيديو غير موجود في هذا المتصفح. ارفعه مرة أخرى.", "The video file is not stored in this browser. Upload it again.");
+      const remote = projectOf(d, c.project_id).remote_url;
+      const file = remote ? null : await sourceOf(c.project_id);
+      if (!file && !remote) throw new ApiException(409, "NO_SOURCE", "ملف الفيديو غير موجود في هذا المتصفح. ارفعه مرة أخرى.", "The video file is not stored in this browser. Upload it again.");
       const es = { ...c.edit_state, resolution };
       const tr = await this.transcript(c.project_id);
       const words: WordT[] = es.words ?? tr.segments.flatMap((s) => s.words).filter((w) => w.end > es.start && w.start < es.end);
       const e: ExportItem = { id: uid("le_"), clip_id: cid, status: "running", job_id: null, resolution, size_bytes: null, duration: es.end - es.start, download_url: null };
       const job = startJob("export", c.project_id, async (report) => {
         let r;
-        try { r = await renderClip(objUrl(`src:${c.project_id}`, file), es, words, (f) => report("render", f)); }
+        try { r = await renderClip(remote ?? objUrl(`src:${c.project_id}`, file!), es, words, (f) => report("render", f)); }
         catch (err) {
           throw new Fail("EXPORT_FAILED", `تعذّر تصدير المقطع في هذا المتصفح (${err instanceof Error ? err.message : err}). جرّب Chrome أو Edge، وأبقِ الصفحة ظاهرة أثناء التصدير.`, `Export failed in this browser (${err instanceof Error ? err.message : err}). Try Chrome or Edge and keep the tab visible while exporting.`);
         }
@@ -379,6 +380,47 @@ export function createLocalBackend(): Backend {
       save(d);
     },
   };
+}
+
+/** Real showcase: a CC-licensed Arabic interview hosted on Wikimedia Commons, analysed by this engine. */
+export interface Showcase {
+  source: { title: string; page: string; license: string; author: string; url: string; preview_url: string; duration: number; width: number; height: number };
+  suggestions: (Suggestion & { center?: number })[];
+  transcript: Transcript;
+}
+export async function loadShowcase(): Promise<Showcase> {
+  const r = await fetch("/demo/showcase.json");
+  if (!r.ok) throw new Error("showcase");
+  return r.json();
+}
+
+/**
+ * Opens the showcase as a ready project in this browser: real clips straight away, no upload, no model
+ * download. The video streams from Wikimedia Commons; thumbnails are drawn from it on the spot.
+ */
+export async function createSampleProject(backend: Backend): Promise<string> {
+  const sc = await loadShowcase();
+  const p = await backend.createProject("مثال: مقابلة عربية حقيقية", "ar");
+  const raw = localStorage.getItem(KEY);
+  const d = raw ? (JSON.parse(raw) as State) : null;
+  const proj = d?.projects.find((x) => x.id === p.id);
+  if (!d || !proj) throw notFound();
+  proj.source = { filename: sc.source.title, duration: sc.source.duration, width: sc.source.width, height: sc.source.height, size_bytes: 0, has_subtitles: false };
+  proj.status = "done";
+  proj.remote_url = sc.source.url;
+  localStorage.setItem(KEY, JSON.stringify(d));
+  await idbPut(`sug:${p.id}`, sc.suggestions);
+  await idbPut(`tr:${p.id}`, sc.transcript);
+  try {
+    const v = await openVideo(sc.source.preview_url);
+    for (const s of sc.suggestions) {
+      const t = s.start + (s.end - s.start) * 0.4;
+      const blob = await thumbnail(v, t, s.center ?? 0.5).catch(() => null);
+      if (blob) await idbPut(`thumb:${p.id}:${s.id}`, blob);
+    }
+    v.removeAttribute("src"); v.load();
+  } catch { /* thumbnails are optional */ }
+  return p.id;
 }
 
 /**

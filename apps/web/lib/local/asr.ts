@@ -18,6 +18,7 @@ self.onmessage = async (e) => {
   try {
     if (type === "load") {
       if (e.data.single) { env.backends.onnx.wasm.numThreads = 1; env.backends.onnx.wasm.proxy = false; }
+      else if (self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 2));
       const opts = { device: e.data.device, progress_callback: (p) => self.postMessage({ id, type: "progress", p }) };
       opts.dtype = e.data.device === "webgpu" ? { encoder_model: "fp32", decoder_model_merged: "q4" } : "q8";
       asr = await pipeline("automatic-speech-recognition", e.data.model, opts);

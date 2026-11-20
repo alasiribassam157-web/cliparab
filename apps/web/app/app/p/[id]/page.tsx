@@ -32,7 +32,7 @@ function ClipCard({ s, pid, onEdit, busy }: { s: Suggestion; pid: string; onEdit
   return (
     <article className="card clip-card" data-testid="clip-card">
       <div className="clip-thumb" aria-hidden={!thumbOk}>
-        {thumbOk ? (
+        {thumbOk && backend.thumbUrl(pid, s.id) ? (
           <img src={backend.thumbUrl(pid, s.id)} alt={s.title} loading="lazy" onError={() => setThumbOk(false)} />
         ) : (
           <span className="clip-thumb-fallback">▶</span>
@@ -163,6 +163,7 @@ export default function ProjectPage() {
         </div>
       )}
 
+      {project.remote_url && <p className="small muted showcase-credit">{t("showcase_credit")}</p>}
       {project.status === "ready" && project.last_error && <div className="err" role="alert">{locale === "ar" ? project.last_error.ar : project.last_error.en}</div>}
       {project.status === "ready" && <div className="card"><button className="btn primary" onClick={startAnalysis} disabled={busy}>{t("start_analysis")}</button></div>}
 

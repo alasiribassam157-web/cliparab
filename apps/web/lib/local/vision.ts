@@ -84,20 +84,60 @@ export async function frameInfo(v: HTMLVideoElement): Promise<FrameInfo> {
 }
 
 /** Best moment in [start, end] (skips the first/last 10%, mild preference for the middle): its time and subject x, plus the clip's typical subject x (`center`) for the 9:16 crop. */
+const MW = 96;
+function grayRow(v: HTMLVideoElement): Float32Array {
+  const H = Math.max(1, Math.round((MW * v.videoHeight) / Math.max(1, v.videoWidth)));
+  const c = document.createElement("canvas");
+  c.width = MW; c.height = H;
+  const ctx = c.getContext("2d", { willReadFrequently: true })!;
+  ctx.drawImage(v, 0, 0, MW, H);
+  const px = ctx.getImageData(0, 0, MW, H).data;
+  const g = new Float32Array(MW * H);
+  for (let i = 0; i < MW * H; i++) g[i] = 0.299 * px[4 * i] + 0.587 * px[4 * i + 1] + 0.114 * px[4 * i + 2];
+  return g;
+}
+
+/**
+ * Best moment in [start, end] (skips the first/last 10%, mild preference for the middle): its time and subject x,
+ * plus the clip's subject x for the 9:16 crop (`center`). The speaker is found by where things move between frames
+ * 0.4 s apart (a talking, gesturing person moves; the listener and background mostly do not); a detected face wins.
+ */
 export async function bestFrame(v: HTMLVideoElement, start: number, end: number, samples = 7): Promise<{ t: number; cx: number; center: number; quality: number }> {
   const span = Math.max(end - start, 0.1), mid = (start + end) / 2;
   let best = { t: mid, cx: 0.5, s: -1, q: 0 };
   const cxs: number[] = [];
+  const faceXs: number[] = [];
+  const motion = new Float32Array(MW);
   for (let i = 0; i < samples; i++) {
     const t = start + span * (0.1 + (0.8 * (i + 0.5)) / samples);
     await seek(v, t);
     const f = await frameInfo(v);
+    const a = grayRow(v);
+    await seek(v, Math.min(end, t + 0.4));
+    const b = grayRow(v);
+    const rows = a.length / MW;
+    for (let y = 0; y < rows; y++) for (let x = 0; x < MW; x++) { const d = Math.abs(a[y * MW + x] - b[y * MW + x]); if (d > 12) motion[x] += d; }
     cxs.push(f.cx);
+    if (f.face) faceXs.push(f.cx);
     const s = f.score - (0.15 * Math.abs(t - mid)) / (span / 2);
     if (s > best.s) best = { t, cx: f.cx, s, q: f.score };
   }
-  const sorted = [...cxs].sort((a, b) => a - b);
-  return { t: best.t, cx: best.cx, center: sorted[Math.floor(sorted.length / 2)], quality: Math.min(1, best.q / 2.5) };
+  const median = (xs: number[]) => [...xs].sort((p, q) => p - q)[Math.floor(xs.length / 2)];
+  let center = median(cxs);
+  // motion centroid, smoothed; only trusted when the movement is concentrated (not a camera pan or a cut)
+  const sm = Array.from(motion, (_, x) => { let s = 0; for (let k = -4; k <= 4; k++) s += motion[Math.min(MW - 1, Math.max(0, x + k))]; return s; });
+  const total = sm.reduce((p, q) => p + q, 0);
+  if (total > 0) {
+    let peak = 0;
+    sm.forEach((m, x) => { if (m > sm[peak]) peak = x; });
+    let w = 0, acc = 0;
+    for (let x = Math.max(0, peak - 20); x <= Math.min(MW - 1, peak + 20); x++) { w += sm[x]; acc += sm[x] * x; }
+    if (w / total > 0.45) center = (acc / w + 0.5) / MW;
+  }
+  if (faceXs.length >= Math.ceil(samples / 2)) center = median(faceXs);
+  // thumbnail framing follows the same subject unless that frame has its own face
+  const thumbCx = best.cx !== 0.5 && faceXs.length ? best.cx : center;
+  return { t: best.t, cx: thumbCx, center: Math.max(0, Math.min(1, center)), quality: Math.min(1, best.q / 2.5) };
 }
 
 /** Vertical 9:16 JPEG of time `t`, cropped around `cx`. */

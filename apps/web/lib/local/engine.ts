@@ -5,7 +5,8 @@
  */
 import type { ScoreKey, Suggestion, WordT } from "../types";
 
-export interface Word extends WordT { speaker?: string | null }
+/** `eos`: last word of a recognised speech segment — a natural pause, used as a sentence end when there is no punctuation. */
+export interface Word extends WordT { speaker?: string | null; eos?: boolean }
 export interface Sentence { id: number; start: number; end: number; text: string; words: Word[]; speaker: string | null }
 interface Candidate {
   start: number; end: number; first: number; last: number; text: string; flags: string[]; chapter: number;
@@ -59,7 +60,7 @@ export function splitSentences(words: Word[], gap = 0.8, minWords = 4, maxWords 
   words.forEach((w, i) => {
     cur.push(w);
     const nxt = words[i + 1];
-    if (!nxt || endsSentence(w.text) || nxt.start - w.end > gap || (w.speaker ?? null) !== (nxt.speaker ?? null)) { groups.push(cur); cur = []; }
+    if (!nxt || endsSentence(w.text) || w.eos || nxt.start - w.end > gap || (w.speaker ?? null) !== (nxt.speaker ?? null)) { groups.push(cur); cur = []; }
   });
   const merged: Word[][] = [];
   for (const g of groups) {
@@ -403,7 +404,8 @@ export function interpolateWords(text: string, start: number, end: number, conf 
   let cur = start;
   return toks.map((t, i) => {
     const nxt = cur + (dur * weights[i]) / total;
-    const w = { text: t, start: Math.round(cur * 1000) / 1000, end: Math.round(nxt * 1000) / 1000, conf, approx: true };
+    const w: Word = { text: t, start: Math.round(cur * 1000) / 1000, end: Math.round(nxt * 1000) / 1000, conf, approx: true };
+    if (i === toks.length - 1) w.eos = true;
     cur = nxt;
     return w;
   });

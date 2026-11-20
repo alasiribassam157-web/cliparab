@@ -25,8 +25,7 @@ try {
   check("a YouTube link cannot be submitted in the free version", await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
   check("and the page says why, in Arabic", (await page.textContent("form")).includes("يحتاج خادمًا مدفوعًا"));
   await page.getByRole("button", { name: "رفع ملف" }).click();
-  await page.getByRole("button", { name: "جرّب على حلقة نموذجية" }).click();
-  await page.waitForFunction(() => document.querySelector(".drop b")?.textContent?.includes(".mp4"), null, { timeout: 15000 });
+  await page.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
   await page.locator('input[type=file][accept*=".srt"]').setInputFiles(path.join(here, "sample.srt"));
   await page.getByRole("button", { name: "ابدأ التحليل" }).click();
   await page.waitForSelector(".clip-card, .err", { timeout: 60000 });

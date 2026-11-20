@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type DragEvent, type FormEvent } from "rea
 import { Progress } from "@/components/ui";
 import { errorText, useBackend } from "@/lib/backend";
 import { useI18n } from "@/lib/i18n";
-import { sampleFiles } from "@/lib/local/backend";
+import { createSampleProject } from "@/lib/local/backend";
 import { isPhoneOrTablet } from "@/lib/local/asr";
 import { ApiException, type Backend, type Job } from "@/lib/types";
 
@@ -52,7 +52,7 @@ export default function NewProject() {
   useEffect(() => setPhone(isPhoneOrTablet()), []);
   const pickSample = async () => {
     setSampling(true); setErr("");
-    try { const f = await sampleFiles(); setFile(f.video); setSrt(f.srt); setSource("file"); if (!name) setName(locale === "ar" ? "حلقة نموذجية" : "Sample episode"); }
+    try { const id = await createSampleProject(backend); router.push(`/app/p/${id}`); return; }
     catch (e) { setErr(errorText(e, locale)); }
     setSampling(false);
   };

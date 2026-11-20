@@ -37,6 +37,9 @@ const shot = (n) => page.screenshot({ path: path.join(shots, n + ".png") });
 try {
   await page.goto(base + "/");
   check("landing is RTL Arabic and says it is free", (await page.evaluate(() => document.documentElement.dir)) === "rtl" && (await page.textContent("body")).includes("مجاني"));
+  await page.waitForSelector('[data-testid="showcase"] .showcase-item', { timeout: 10000 });
+  const sc = await page.locator(".showcase-item").evaluateAll((els) => els.map((e) => [e.querySelector("video")?.getAttribute("src")?.includes("upload.wikimedia.org"), e.textContent]));
+  check("landing shows 3 real clips from the CC interview, with credit", sc.length === 3 && sc.every((x) => x[0]) && (await page.textContent("body")).includes("CC BY 3.0"), sc.map((x) => x[1].slice(0, 30)).join(" | "));
   await shot("01-landing");
 
   await page.goto(base + "/app/new");
@@ -46,10 +49,11 @@ try {
   check("link mode explains it needs a server and cannot submit", (await page.textContent("form")).includes("يحتاج خادمًا") && await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
   await page.getByRole("button", { name: "رفع ملف" }).click();
   check("cannot start without a file", await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
-  await page.getByRole("button", { name: "جرّب على حلقة نموذجية" }).click();
-  await page.waitForFunction(() => document.querySelector(".drop b")?.textContent?.includes(".mp4"), null, { timeout: 15000 });
-  check("sample button attaches the sample and its subtitles", (await page.locator('[data-testid="srt-name"]').textContent()).includes(".srt"));
-  await shot("02-new-sample");
+  await page.getByRole("button", { name: "شوف مثالًا حقيقيًا جاهزًا" }).click();
+  await page.waitForURL(/\/app\/p\//, { timeout: 30000 });
+  await page.waitForSelector(".clip-card", { timeout: 30000 });
+  check("sample opens instantly as a ready project with real clips", (await page.locator(".clip-card").count()) === 8 && (await page.textContent("body")).includes("لا يركزوش على الجزء بتاع أوروبا وأمريكا") && (await page.textContent("body")).includes("CC BY 3.0"));
+  await shot("02-sample-project");
   // run the speech-recognition path: same video uploaded as a plain file, no subtitles
   await page.goto(base + "/app/new");
   await page.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
@@ -122,7 +126,7 @@ try {
   await page.goto(base + "/app");
   await page.waitForTimeout(500);
   check("project listed on the dashboard", (await page.textContent("body")).includes("حلقة نموذجية"));
-  const unexpected = problems.filter((p) => !/favicon|404/.test(p));
+  const unexpected = problems.filter((p) => !/favicon|404|ERR_TUNNEL_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED/.test(p)); // the sandbox is offline: Wikimedia is unreachable here
   check("no unexpected console/page errors", unexpected.length === 0, unexpected.join(" | "));
 } catch (e) {
   console.log("FAIL exception", e.message);

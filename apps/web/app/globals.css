@@ -161,3 +161,13 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
   main.container { padding-block: 18px; }
 }
 .banner.ok { background: color-mix(in srgb, #22c55e 16%, var(--surface)); border-bottom-color: color-mix(in srgb, #22c55e 40%, var(--border)); }
+
+/* landing showcase: real clips playing live */
+.showcase { display: flex; justify-content: center; gap: 22px; margin: 36px 0 8px; flex-wrap: wrap; }
+.showcase-item { width: 210px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.showcase-phone { width: 210px; padding: 0; cursor: pointer; font: inherit; }
+.showcase-phone .fill { position: absolute; inset: 0; }
+.showcase-sound { position: absolute; top: 10px; inset-inline-start: 10px; font-size: .85rem; background: rgba(0,0,0,.55); border-radius: 999px; padding: 2px 7px; }
+.showcase-score { position: absolute; top: 10px; inset-inline-end: 10px; font-size: .78rem; font-weight: 800; color: #0b0b12; background: #FFD21F; border-radius: 999px; padding: 2px 8px; }
+.showcase-title { margin: 0; font-size: .85rem; font-weight: 700; text-align: center; line-height: 1.4; }
+.showcase-credit { font-size: .72rem; }

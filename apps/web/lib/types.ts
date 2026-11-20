@@ -27,6 +27,8 @@ export interface Project {
   active_job_id?: string | null;
   /** Why the last in-browser analysis stopped (local mode). */
   last_error?: { ar: string; en: string } | null;
+  /** Sample project whose video streams from a public URL (local mode). */
+  remote_url?: string;
 }
 
 export interface JobError {
