@@ -37,8 +37,9 @@ export async function openVideo(url: string): Promise<HTMLVideoElement> {
   return v;
 }
 
-export function closeVideo(v: HTMLVideoElement) {
-  try { v.pause(); URL.revokeObjectURL(v.src); v.removeAttribute("src"); v.load(); v.remove(); } catch { /* ignore */ }
+/** Releases the element. `revoke` also frees its blob URL: only for URLs this element owns, never shared cached ones. */
+export function closeVideo(v: HTMLVideoElement, revoke = false) {
+  try { v.pause(); if (revoke) URL.revokeObjectURL(v.src); v.removeAttribute("src"); v.load(); v.remove(); } catch { /* ignore */ }
 }
 
 export function seek(v: HTMLVideoElement, t: number): Promise<void> {

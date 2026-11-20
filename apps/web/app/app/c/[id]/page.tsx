@@ -8,6 +8,7 @@ import { errorText, useBackend } from "@/lib/backend";
 import { clamp, fmtBytes } from "@/lib/format";
 import { isEmphasis } from "@/lib/captions";
 import { useI18n } from "@/lib/i18n";
+import { unlockAudio } from "@/lib/local/render";
 import { ApiException, type Clip, type EditState, type ExportItem, type Project, type Transcript, type WordT } from "@/lib/types";
 
 type Tab = "trim" | "layout" | "captions" | "text" | "export";
@@ -117,6 +118,7 @@ export default function Editor() {
   };
 
   const startExport = async () => {
+    unlockAudio(); // must run inside the tap, before any await (iPhone)
     await flush();
     setErr("");
     try {

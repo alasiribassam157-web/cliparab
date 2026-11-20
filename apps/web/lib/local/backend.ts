@@ -197,7 +197,7 @@ export function createLocalBackend(): Backend {
       const dflt = { t: (sug[i].start + sug[i].end) / 2, cx: 0.5, center: 0.5, quality: 0.6 };
       // a browser that cannot seek this file (some phones) must not hold the analysis hostage: after one stall, skip the frame work
       let fr = dflt;
-      if (v) { try { fr = await within(bestFrame(v, sug[i].start, sug[i].end), 12000); } catch { if (!v.videoWidth || i === 0) { closeVideo(v); v = null; } } }
+      if (v) { try { fr = await within(bestFrame(v, sug[i].start, sug[i].end), 12000); } catch { if (!v.videoWidth || i === 0) { closeVideo(v, true); v = null; } } }
       frames.push(fr);
       report("preview", 0.88 + 0.06 * ((i + 1) / sug.length));
     }
@@ -212,11 +212,11 @@ export function createLocalBackend(): Backend {
       if (v) {
         const blob = await within(thumbnail(v, f.t, f.cx), 8000).catch(() => null);
         if (blob) await idbPut(`thumb:${pid}:${sug[i].id}`, blob);
-        else if (i === 0) { closeVideo(v); v = null; }
+        else if (i === 0) { closeVideo(v, true); v = null; }
       }
       report("preview", 0.94 + 0.05 * ((i + 1) / sug.length));
     }
-    if (v) closeVideo(v);
+    if (v) closeVideo(v, true);
     for (const k of [...urls.keys()]) if (k.startsWith(`thumb:${pid}:`)) { URL.revokeObjectURL(urls.get(k)!); urls.delete(k); }
 
     const transcript: Transcript = { language: isRtl(outSegs.map((x) => x.text).join(" ")) ? "ar" : "en", engine, segments: outSegs.sort((a, b) => a.start - b.start).map((s, i) => ({ id: i, start: s.start, end: s.end, text: s.text, words: s.words })) };
@@ -391,7 +391,7 @@ export function createLocalBackend(): Backend {
       const e: ExportItem = { id: uid("le_"), clip_id: cid, status: "running", job_id: null, resolution, size_bytes: null, duration: es.end - es.start, download_url: null };
       const job = startJob("export", c.project_id, async (report) => {
         let r;
-        try { r = await renderClip(remote ?? objUrl(`src:${c.project_id}`, file!), es, words, (f) => report("render", f)); }
+        try { r = await renderClip(remote ?? objUrl(`src:${c.project_id}`, file!), es, words, (f) => report("render", f), file); }
         catch (err) {
           throw new Fail("EXPORT_FAILED", `تعذّر تصدير المقطع في هذا المتصفح (${err instanceof Error ? err.message : err}). جرّب Chrome أو Edge، وأبقِ الصفحة ظاهرة أثناء التصدير.`, `Export failed in this browser (${err instanceof Error ? err.message : err}). Try Chrome or Edge and keep the tab visible while exporting.`);
         }

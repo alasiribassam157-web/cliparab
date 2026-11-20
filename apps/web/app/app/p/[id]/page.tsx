@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Breakdown, Progress, ScoreRing, statusChip } from "@/components/ui";
 import { errorText, useBackend } from "@/lib/backend";
+import { unlockAudio } from "@/lib/local/render";
 import type { ExportItem } from "@/lib/types";
 import { fmtDuration, fmtTime } from "@/lib/format";
 import { useI18n } from "@/lib/i18n";
@@ -18,6 +19,7 @@ function ClipCard({ s, pid, onEdit, busy, top }: { s: Suggestion; pid: string; o
   const [why, setWhy] = useState(false);
   const [dl, setDl] = useState<{ p: number; url?: string; name?: string; err?: string } | null>(null);
   const download = async () => {
+    unlockAudio(); // must run inside the tap, before any await (iPhone)
     setDl({ p: 0 });
     try {
       const clip = await backend.createClip(pid, s.id);

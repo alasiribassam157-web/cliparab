@@ -4,7 +4,7 @@
  * It runs in real time (a 30 s clip takes about 30 s) and needs the tab to stay visible.
  */
 import { isRtl } from "./dir";
-import { closeVideo } from "./vision";
+import { closeVideo, within } from "./vision";
 import { inkFor } from "../brand";
 import { captionAt, chunkWords } from "../captions";
 import type { EditState, WordT } from "../types";
@@ -112,26 +112,80 @@ function drawFrame(ctx: CanvasRenderingContext2D, v: HTMLVideoElement, W: number
   }
 }
 
-export async function renderClip(src: string, es: EditState, words: WordT[], onProgress: (f: number) => void): Promise<RenderResult> {
+let sharedCtx: AudioContext | null = null;
+/**
+ * Call synchronously inside a tap/click handler, before any await: iOS Safari only lets an AudioContext run when
+ * it is created or resumed during a user gesture. Later exports reuse this context.
+ */
+export function unlockAudio() {
+  try {
+    const C = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!C) return;
+    sharedCtx ??= new C();
+    void sharedCtx.resume().catch(() => undefined);
+    const b = sharedCtx.createBuffer(1, 1, 22050), n = sharedCtx.createBufferSource(); // a silent blip finishes the unlock on old iOS
+    n.buffer = b; n.connect(sharedCtx.destination); n.start(0);
+  } catch { /* ignore */ }
+}
+
+/** Safari (iPhone/iPad/Mac): media-element audio needs a fresh gesture, so decode the audio track instead. */
+function preferDecodedAudio(): boolean {
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1) || (/Safari\//.test(ua) && !/Chrome|Chromium|Android|Edg\//.test(ua));
+}
+
+const decoded = new Map<Blob, Promise<AudioBuffer>>();
+
+/**
+ * Renders the clip in real time: canvas frames + audio into MediaRecorder. `audioFile` (the source file, when it is
+ * local) allows a decoded-audio path that needs no gesture: used first on Safari, and as the fallback anywhere the
+ * video element refuses to play with sound or stops advancing.
+ */
+export async function renderClip(src: string, es: EditState, words: WordT[], onProgress: (f: number) => void, audioFile?: Blob | null): Promise<RenderResult> {
+  const canDecode = !!audioFile && audioFile.size < 450 * 1024 * 1024;
+  if (canDecode && preferDecodedAudio()) return renderOnce(src, es, words, onProgress, audioFile!);
+  try { return await renderOnce(src, es, words, onProgress, null); }
+  catch (err) {
+    if (!canDecode) throw err;
+    console.warn("[vyra] export with element audio failed, retrying with decoded audio:", err);
+    return renderOnce(src, es, words, onProgress, audioFile!);
+  }
+}
+
+async function renderOnce(src: string, es: EditState, words: WordT[], onProgress: (f: number) => void, audioFile: Blob | null): Promise<RenderResult> {
   const mime = pickMime();
   if (!mime || typeof HTMLCanvasElement.prototype.captureStream !== "function") throw new Error("recorder-unsupported");
   const W = es.resolution === "720p" ? 720 : 1080, H = Math.round((W * 16) / 9);
+  const C = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  sharedCtx ??= new C();
+  const actx = sharedCtx;
+  await within(actx.resume(), 3000).catch(() => undefined);
+  if (actx.state !== "running") throw new Error("audio-locked");
+  let buf: AudioBuffer | null = null;
+  if (audioFile) {
+    let pr = decoded.get(audioFile);
+    if (!pr) { pr = audioFile.arrayBuffer().then((ab) => actx.decodeAudioData(ab)); decoded.set(audioFile, pr); pr.catch(() => decoded.delete(audioFile)); }
+    buf = await within(pr, 60000);
+  }
   const v = await openVideo(src);
-  v.muted = false; v.volume = 1;
+  v.muted = !!buf; v.volume = 1;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d")!;
   const family = captionFont();
   const events = es.captions ? chunkWords(words, 22) : [];
 
-  const actx = new AudioContext();
-  await actx.resume().catch(() => undefined);
   const dest = actx.createMediaStreamDestination();
-  const srcNode = actx.createMediaElementSource(v); // not connected to the speakers: export is silent for the user
+  let bufNode: AudioBufferSourceNode | null = null;
+  let elNode: MediaElementAudioSourceNode | null = null;
+  let srcNode: AudioNode;
+  if (buf) { bufNode = actx.createBufferSource(); bufNode.buffer = buf; srcNode = bufNode; }
+  else { elNode = actx.createMediaElementSource(v); srcNode = elNode; } // not connected to the speakers: export is silent for the user
   // speech levelling (≈ the server's loudnorm): an automatic gain steers the level toward −18 dBFS RMS while the
   // clip plays (quiet recordings are lifted, loud ones brought down), and a limiter keeps peaks from clipping
   const mkAgc = (analyser: AnalyserNode, gain: GainNode) => ({ analyser, gain, buf: new Float32Array(analyser.fftSize) });
   let agc: ReturnType<typeof mkAgc> | null = null;
+  const nodes: AudioNode[] = [srcNode];
   if (es.loudnorm !== false) {
     const analyser = actx.createAnalyser();
     analyser.fftSize = 2048;
@@ -141,12 +195,13 @@ export async function renderClip(src: string, es: EditState, words: WordT[], onP
     srcNode.connect(analyser);
     srcNode.connect(gain).connect(limiter).connect(dest);
     agc = mkAgc(analyser, gain);
+    nodes.push(analyser, gain, limiter);
   } else {
     srcNode.connect(dest);
   }
   let level = 0;
 
-  await seek(v, es.start);
+  await within(seek(v, es.start), 10000);
   drawFrame(ctx, v, W, H, es);
   const stream = canvas.captureStream(30);
   dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
@@ -156,14 +211,19 @@ export async function renderClip(src: string, es: EditState, words: WordT[], onP
   const stopped = new Promise<void>((ok) => { rec.onstop = () => ok(); });
 
   const dur = es.end - es.start;
-  let raf = 0;
-  const finish = () => { if (rec.state !== "inactive") rec.stop(); v.pause(); cancelAnimationFrame(raf); };
+  let raf = 0, failure: Error | null = null;
+  const cleanup = () => {
+    try { bufNode?.stop(); } catch { /* not started */ }
+    for (const n of nodes) { try { n.disconnect(); } catch { /* ignore */ } }
+    stream.getTracks().forEach((t) => t.stop());
+  };
+  const finish = (err?: Error) => { if (err && !failure) failure = err; if (rec.state !== "inactive") rec.stop(); v.pause(); cancelAnimationFrame(raf); };
   const tick = () => {
     if (agc) {
       agc.analyser.getFloatTimeDomainData(agc.buf);
-      let s = 0;
-      for (let i = 0; i < agc.buf.length; i++) s += agc.buf[i] * agc.buf[i];
-      const rms = Math.sqrt(s / agc.buf.length);
+      let s2 = 0;
+      for (let i = 0; i < agc.buf.length; i++) s2 += agc.buf[i] * agc.buf[i];
+      const rms = Math.sqrt(s2 / agc.buf.length);
       if (rms > 0.004) { // ignore pauses so silence is not pumped up
         level = level ? level * 0.92 + rms * 0.08 : rms;
         const want = Math.min(8, Math.max(0.25, 0.126 / level)); // 0.126 ≈ −18 dBFS
@@ -178,14 +238,24 @@ export async function renderClip(src: string, es: EditState, words: WordT[], onP
     raf = requestAnimationFrame(tick);
   };
   rec.start(1000);
-  await v.play();
+  try { await within(v.play(), 8000); }
+  catch (e) { finish(new Error(`play-blocked: ${e instanceof Error ? e.message : e}`)); await stopped; cleanup(); closeVideo(v); throw failure; }
+  if (bufNode) bufNode.start(0, Math.max(0, v.currentTime), dur + 1);
   raf = requestAnimationFrame(tick);
-  // safety net in case frame callbacks are throttled (hidden tab): stop at the end time anyway
-  const guard = setInterval(() => { if (v.currentTime >= es.end || v.ended) finish(); }, 250);
+  // safety nets: stop at the end time even if frame callbacks are throttled, and fail (instead of hanging) if the
+  // video stops advancing for 12 s
+  let lastT = v.currentTime, lastMove = Date.now();
+  const guard = setInterval(() => {
+    if (v.currentTime >= es.end || v.ended) { finish(); return; }
+    if (v.currentTime > lastT + 0.01) { lastT = v.currentTime; lastMove = Date.now(); }
+    else if (!document.hidden && Date.now() - lastMove > 12000) finish(new Error("stalled"));
+    if (!document.hidden && v.paused && !failure && rec.state !== "inactive") v.play().catch(() => undefined);
+  }, 250);
   await stopped;
   clearInterval(guard);
-  void actx.close();
+  cleanup();
   closeVideo(v);
+  if (failure) throw failure;
   onProgress(1);
   return { blob: new Blob(parts, { type: mime.split(";")[0] }), mime: mime.split(";")[0], duration: dur };
 }
