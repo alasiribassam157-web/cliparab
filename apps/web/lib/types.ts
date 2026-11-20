@@ -112,6 +112,8 @@ export interface EditState {
   words: WordT[] | null;
   resolution: "720p" | "1080p";
   loudnorm: boolean;
+  /** Caption language when the project can show both (in-browser backend). */
+  cap_lang?: "ar" | "en";
   [k: string]: unknown;
 }
 
@@ -167,7 +169,8 @@ export interface Backend {
   analyze(pid: string, maxClips: number): Promise<Job>;
   watchJob(jobId: string, cb: (j: Job) => void): () => void;
   suggestions(pid: string): Promise<Suggestion[]>;
-  transcript(pid: string): Promise<Transcript>;
+  /** Captions of a project; `lang` asks for that language (translated on demand by the in-browser backend). */
+  transcript(pid: string, lang?: "ar" | "en", onProgress?: (f: number) => void): Promise<Transcript>;
   mediaUrl(pid: string): string;
   thumbUrl(pid: string, suggestionId: string): string;
   createClip(pid: string, suggestionId: string): Promise<Clip>;

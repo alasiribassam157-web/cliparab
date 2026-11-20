@@ -44,6 +44,7 @@ export default function Editor() {
   const [expProgress, setExpProgress] = useState(0);
   const [reviewUrl, setReviewUrl] = useState("");
   const [err, setErr] = useState("");
+  const [trProg, setTrProg] = useState<number | null>(null);
   const [toast, say] = useToast();
   const version = useRef(1);
   const pending = useRef<Partial<EditState>>({});
@@ -55,7 +56,8 @@ export default function Editor() {
     (async () => {
       try {
         const c = await backend.getClip(id);
-        const [p, tr] = await Promise.all([backend.getProject(c.project_id), backend.transcript(c.project_id)]);
+        const cl = c.edit_state.cap_lang === "ar" || c.edit_state.cap_lang === "en" ? c.edit_state.cap_lang : undefined;
+        const [p, tr] = await Promise.all([backend.getProject(c.project_id), backend.transcript(c.project_id, cl)]);
         if (!alive) return;
         version.current = c.version;
         title.current = c.title;
@@ -133,10 +135,35 @@ export default function Editor() {
     setReviewUrl(window.location.origin + r.path);
   };
 
+  const capLang = (es.cap_lang === "ar" || es.cap_lang === "en" ? es.cap_lang : transcript?.language === "en" ? "en" : "ar") as "ar" | "en";
+  const canSwitch = backend.mode === "local" && !!transcript?.segments.length;
+  const switchLang = async (l: "ar" | "en") => {
+    if (l === capLang || trProg !== null) return;
+    setTrProg(0); setErr("");
+    try {
+      const tr = await backend.transcript(project.id, l, (f) => setTrProg(f));
+      setTranscript(tr);
+      update({ cap_lang: l, words: null, caption: { emphasis: [] } });
+    } catch { setErr(t("tr_fail")); }
+    finally { setTrProg(null); }
+  };
+
   const saveLabel = save === "saving" ? t("saving") : save === "saved" ? t("saved") : save === "conflict" ? t("conflict") : "";
   return (
     <div className="editor">
-      <PhonePreview src={backend.mediaUrl(project.id)} es={es} words={baseWords} aspect={(project.source?.width ?? 16) / (project.source?.height ?? 9)} />
+      <div className="preview-col">
+        <PhonePreview src={backend.mediaUrl(project.id)} es={es} words={baseWords} aspect={(project.source?.width ?? 16) / (project.source?.height ?? 9)} />
+        {canSwitch && (
+          <div className="cap-switch">
+            <span className="small muted">{t("cap_lang")}</span>
+            <div className="seg" role="group" aria-label={t("cap_lang")} data-testid="cap-switch">
+              <button type="button" aria-pressed={capLang === "ar"} onClick={() => switchLang("ar")} disabled={trProg !== null}>العربية</button>
+              <button type="button" aria-pressed={capLang === "en"} onClick={() => switchLang("en")} disabled={trProg !== null}>English</button>
+            </div>
+            {trProg !== null && <div className="stack" style={{ gap: 4, width: "100%" }}><span className="small muted">{t("translating")} {Math.round(trProg * 100)}%</span><div className="progress"><i style={{ width: `${Math.max(4, trProg * 100)}%` }} /></div></div>}
+          </div>
+        )}
+      </div>
       <div className="card">
         <div className="row spread" style={{ marginBottom: 12 }}>
           <h2 style={{ margin: 0 }}>{clip.title}</h2>

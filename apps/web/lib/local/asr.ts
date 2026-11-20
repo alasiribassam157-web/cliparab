@@ -12,7 +12,7 @@ const TRANSFORMERS = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
 const WORKER_SRC = `
 import { pipeline, env } from "${TRANSFORMERS}";
 env.allowLocalModels = false;
-let asr = null, mt = null;
+let asr = null, mt = null, mtName = "";
 self.onmessage = async (e) => {
   const { id, type } = e.data;
   try {
@@ -24,7 +24,8 @@ self.onmessage = async (e) => {
       asr = await pipeline("automatic-speech-recognition", e.data.model, opts);
       self.postMessage({ id, type: "done" });
     } else if (type === "mt") {
-      if (!mt) {
+      if (!mt || mtName !== e.data.model) {
+        mtName = e.data.model;
         if (!asr && self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 2));
         mt = await pipeline("translation", e.data.model, { device: "wasm", dtype: "q8", progress_callback: (p) => self.postMessage({ id, type: "progress", p }) });
       }
@@ -50,7 +51,7 @@ type Progress = (stage: "model" | "transcribe", f: number) => void;
 
 /** Tests (and future engines) can replace recognition: window.__CLIPARAB_ASR__(pcm16k, offsetSeconds) → segments. */
 type Override = (pcm: Float32Array, offset: number) => Promise<AsrSegment[]>;
-declare global { interface Window { __CLIPARAB_ASR__?: Override; __CLIPARAB_MT__?: (texts: string[]) => Promise<string[]> } }
+declare global { interface Window { __CLIPARAB_ASR__?: Override; __CLIPARAB_MT__?: (texts: string[], from?: string, to?: string) => Promise<string[]> } }
 
 const HALLUCINATIONS = ["نانسي قنقر", "ترجمة نانسي", "اشتركوا في القناة", "شكرا للمشاهدة", "subtitles by", "amara.org"];
 
@@ -164,13 +165,42 @@ export async function transcribe(pcm: Float32Array, offset: number, onProgress: 
   return segs;
 }
 
+type Lang = "ar" | "en";
+interface ChromeTranslator { translate(t: string): Promise<string>; destroy?(): void }
+interface ChromeTranslatorApi {
+  availability(o: { sourceLanguage: string; targetLanguage: string }): Promise<string>;
+  create(o: { sourceLanguage: string; targetLanguage: string; monitor?: (m: EventTarget) => void }): Promise<ChromeTranslator>;
+}
+
+/** Chrome's built-in on-device translator (Chrome 138+ on computers): clearly better Arabic than the small open model. */
+async function chromeTranslator(from: Lang, to: Lang, onProgress: (f: number) => void): Promise<ChromeTranslator | null> {
+  const T = (globalThis as unknown as { Translator?: ChromeTranslatorApi }).Translator;
+  if (!T) return null;
+  try {
+    const a = await T.availability({ sourceLanguage: from, targetLanguage: to });
+    if (a === "unavailable") return null;
+    return await within(T.create({ sourceLanguage: from, targetLanguage: to, monitor: (m) => m.addEventListener("downloadprogress", (e) => onProgress(0.3 * ((e as unknown as { loaded: number }).loaded ?? 0))) }), a === "available" ? 15000 : 120000);
+  } catch { return null; }
+}
+function within<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((ok, err) => { const t = setTimeout(() => err(new Error("timeout")), ms); p.then((x) => { clearTimeout(t); ok(x); }, (e) => { clearTimeout(t); err(e); }); });
+}
+
 /**
- * English → Arabic translation in the browser (Helsinki-NLP OPUS-MT en-ar, 8-bit ONNX, ≈110 MB, downloaded once).
- * Runs in the same worker as Whisper on computers; on phones the speech model is released first to save memory.
- * An empty string comes back for any sentence the model could not translate.
+ * Translate sentences between English and Arabic in the browser. Uses Chrome's built-in translator when the
+ * browser has it; otherwise Helsinki-NLP OPUS-MT (8-bit ONNX, ≈110 MB, downloaded once) in the worker.
+ * An empty string comes back for any sentence that could not be translated.
  */
-export async function translateToArabic(texts: string[], onProgress: (f: number) => void): Promise<string[]> {
-  if (typeof window !== "undefined" && window.__CLIPARAB_MT__) return window.__CLIPARAB_MT__(texts);
+export async function translateTexts(texts: string[], from: Lang, to: Lang, onProgress: (f: number) => void): Promise<string[]> {
+  if (typeof window !== "undefined" && window.__CLIPARAB_MT__) return window.__CLIPARAB_MT__(texts, from, to);
+  const ct = await chromeTranslator(from, to, onProgress);
+  if (ct) {
+    const out: string[] = [];
+    try {
+      for (const t of texts) { out.push(t.trim() ? await ct.translate(t).catch(() => "") : ""); onProgress(0.3 + 0.7 * (out.length / texts.length)); }
+      if (out.filter(Boolean).length >= texts.filter((t) => t.trim()).length * 0.8) return out;
+    } finally { ct.destroy?.(); }
+  }
   let w: WhisperWorker;
   if (ready && !isPhoneOrTablet()) w = await ready;
   else {
@@ -180,16 +210,17 @@ export async function translateToArabic(texts: string[], onProgress: (f: number)
   const files = new Map<string, [number, number]>();
   let dl = 0, tr = 0;
   const push = () => onProgress(Math.min(1, 0.3 * dl + 0.7 * tr));
-  const out = await w.call<string[]>({ type: "mt", model: "Xenova/opus-mt-en-ar", texts, beams: isPhoneOrTablet() ? 1 : 3 }, [], (p) => {
-    if (p.status === "progress" && p.file) {
-      files.set(p.file, [p.loaded ?? 0, p.total ?? 0]);
-      let a = 0, b = 0; files.forEach(([l, t]) => { a += l; b += t; });
-      if (b) { dl = a / b; push(); }
-    } else if (p.status === "mt") { dl = 1; tr = p.progress ?? tr; push(); }
-  });
-  if (!ready) w.terminate();
-  return out;
+  try {
+    return await w.call<string[]>({ type: "mt", model: `Xenova/opus-mt-${from}-${to}`, texts, beams: isPhoneOrTablet() ? 2 : 4 }, [], (p) => {
+      if (p.status === "progress" && p.file) {
+        files.set(p.file, [p.loaded ?? 0, p.total ?? 0]);
+        let a = 0, b = 0; files.forEach(([l, t]) => { a += l; b += t; });
+        if (b) { dl = a / b; push(); }
+      } else if (p.status === "mt") { dl = 1; tr = p.progress ?? tr; push(); }
+    });
+  } finally { if (!ready) w.terminate(); }
 }
+export const translateToArabic = (texts: string[], onProgress: (f: number) => void) => translateTexts(texts, "en", "ar", onProgress);
 
 /**
  * Translation units: Whisper segments, with a short fragment that does not end a sentence merged into the next
@@ -208,6 +239,9 @@ export function sentenceUnits(segs: AsrSegment[]): AsrSegment[] {
 }
 
 /** Tidy model output for captions: no doubled spaces, Arabic comma/question mark, no stray Latin quotes. */
+export function tidyCaption(t: string, to: Lang): string {
+  return to === "ar" ? tidyArabic(t) : t.replace(/\s+/g, " ").trim();
+}
 export function tidyArabic(t: string): string {
   return t.replace(/\s+/g, " ").replace(/\s+([،؟.!:])/g, "$1").replace(/,/g, "،").replace(/\?/g, "؟").replace(/^["'«]+|["'»]+$/g, "").trim();
 }

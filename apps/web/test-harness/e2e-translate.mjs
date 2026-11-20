@@ -25,7 +25,8 @@ await ctx.addInitScript(() => {
     }
     return out;
   };
-  window.__CLIPARAB_MT__ = async (texts) => { window.__mtInputs = texts; return texts.map((x, i) => `جملة عربية مترجمة رقم ${i + 1} من النص`); };
+  window.__mtCalls = [];
+  window.__CLIPARAB_MT__ = async (texts, from, to) => { window.__mtCalls.push([from, to, texts.length]); if (to === "ar") { window.__mtInputs = texts; return texts.map((x, i) => `جملة عربية مترجمة رقم ${i + 1} من النص`); } return texts.map((x, i) => `English line ${i + 1}`); };
 });
 const page = await ctx.newPage();
 const problems = [];
@@ -58,6 +59,19 @@ try {
   await page.getByRole("tab", { name: "النص" }).click();
   await page.waitForSelector(".words", { timeout: 5000 });
   check("editable transcript is Arabic", /جملةعربيةمترجمة/.test((await page.locator(".words").textContent()).replace(/\s/g, "")) && (await page.locator(".words").getAttribute("dir")) === "rtl");
+  // switch the same clip's captions to English and back, right under the preview
+  await page.locator('[data-testid="cap-switch"]').getByRole("button", { name: "English" }).click();
+  await page.waitForFunction(() => document.querySelector('[data-testid="cap-switch"] [aria-pressed="true"]')?.textContent === "English");
+  await page.getByRole("tab", { name: "النص" }).click();
+  const enWords = (await page.locator(".words").textContent()).replace(/\s/g, "");
+  check("switching to English shows the original English words, left-to-right", /Why|They|Speaking|Five|So|Let|We|A|That/.test(enWords) && (await page.locator(".words").getAttribute("dir")) === "ltr", enWords.slice(0, 40));
+  check("English came from the original transcript, not a new translation", (await page.evaluate(() => window.__mtCalls.filter((c) => c[1] === "en").length)) === 0);
+  await page.locator('[data-testid="cap-switch"]').getByRole("button", { name: "العربية" }).click();
+  await page.waitForFunction(() => document.querySelector('[data-testid="cap-switch"] [aria-pressed="true"]')?.textContent === "العربية");
+  check("switching back to Arabic restores the Arabic captions", /جملةعربيةمترجمة/.test((await page.locator(".words").textContent()).replace(/\s/g, "")));
+  await page.reload();
+  await page.waitForSelector('[data-testid="cap-switch"]', { timeout: 10000 });
+  check("the chosen caption language is saved with the clip", (await page.locator('[data-testid="cap-switch"] [aria-pressed="true"]').textContent()) === "العربية");
 } catch (e) { check("exception", false, e.message); }
 check("no page errors", problems.length === 0, problems.join(" | "));
 await browser.close(); server.close();

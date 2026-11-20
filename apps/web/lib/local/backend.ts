@@ -3,7 +3,7 @@
  * Source videos, thumbnails, transcripts and exports live in IndexedDB; small records in localStorage.
  */
 import { ApiException, type Backend, type Clip, type EditState, type ExportItem, type Job, type Project, type ReviewPage, type Suggestion, type Transcript, type User, type WordT } from "../types";
-import { isPhoneOrTablet, sentenceUnits, tidyArabic, transcribe, translateToArabic } from "./asr";
+import { isPhoneOrTablet, sentenceUnits, tidyCaption, transcribe, translateTexts } from "./asr";
 import { AudioUnsupported, energyPeaks, openAudio, pickSpans, type AudioSource } from "./audio";
 import { interpolateWords, parseSubtitles, suggestClips, type Word } from "./engine";
 import { idbClear, idbDel, idbDelPrefix, idbGet, idbPut } from "./idb";
@@ -46,6 +46,17 @@ function load(): State {
   } catch { return empty(); }
 }
 function save(d: State) { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* storage blocked */ } }
+
+/** Translate transcript segments sentence by sentence and time the translated words over each sentence. */
+async function translateSegs(segs: { start: number; end: number; text: string; words: Word[] }[], from: "ar" | "en", to: "ar" | "en", extra: string[], onProgress: (f: number) => void) {
+  const units = sentenceUnits(segs.map((x) => ({ start: x.start, end: x.end, text: x.text, words: x.words })));
+  const out = (await translateTexts([...units.map((u) => u.text), ...extra], from, to, onProgress)).map((x) => tidyCaption(x, to));
+  if (units.length && out.slice(0, units.length).filter(Boolean).length < units.length * 0.5) throw new Error("translation returned nothing");
+  return {
+    segs: units.map((u, i) => ({ start: u.start, end: u.end, text: out[i] || u.text, words: interpolateWords(out[i] || u.text, u.start, u.end, 0.85) })),
+    extra: out.slice(units.length),
+  };
+}
 
 class Fail extends Error { constructor(public code: string, public ar: string, public en: string) { super(code); } }
 
@@ -165,17 +176,17 @@ export function createLocalBackend(): Backend {
 
     // 3b) English speech with Arabic captions: translate sentence by sentence, then time the Arabic words over each sentence
     const capTo = (p0.language || "").split(">")[1];
+    const srcLang: "ar" | "en" = isRtl(segments.map((x) => x.text).join(" ")) ? "ar" : "en";
     let outSegs: { start: number; end: number; text: string; words: Word[] }[] = segments;
-    if (capTo === "ar" && !isRtl(segments.map((x) => x.text).join(" "))) {
+    if (capTo === "ar" && srcLang === "en") {
       report("translate", 0.83);
-      const units = sentenceUnits(segments);
       const titles = sug.map((x) => x.title.replace(/…$/, ""));
-      let ar: string[];
-      try { ar = (await translateToArabic([...units.map((u) => u.text), ...titles], (f) => report("translate", 0.83 + 0.05 * f))).map(tidyArabic); }
-      catch (err) { console.warn("[cliparab] translation failed", err); throw new Fail("TRANSLATE", "تعذّر تحميل نموذج الترجمة. تأكد من الاتصال بالإنترنت ثم أعد المحاولة.", "The translation model could not be loaded. Check your connection and try again."); }
-      outSegs = units.map((u, i) => ({ start: u.start, end: u.end, text: ar[i] || u.text, words: interpolateWords(ar[i] || u.text, u.start, u.end, 0.85) }));
-      sug = sug.map((x, j) => ({ ...x, title: ar[units.length + j] || x.title, emphasis: [],
-        text: outSegs.filter((u) => u.end > x.start + 0.2 && u.start < x.end - 0.2).map((u) => u.text).join(" ") || x.text }));
+      try {
+        const r = await translateSegs(segments, "en", "ar", titles, (f) => report("translate", 0.83 + 0.05 * f));
+        outSegs = r.segs;
+        sug = sug.map((x, j) => ({ ...x, title: r.extra[j] || x.title, emphasis: [],
+          text: outSegs.filter((u) => u.end > x.start + 0.2 && u.start < x.end - 0.2).map((u) => u.text).join(" ") || x.text }));
+      } catch (err) { console.warn("[cliparab] translation failed", err); throw new Fail("TRANSLATE", "تعذّر تحميل نموذج الترجمة. تأكد من الاتصال بالإنترنت ثم أعد المحاولة.", "The translation model could not be loaded. Check your connection and try again."); }
     }
 
     // 4) best frame + subject centre per clip, visual score, thumbnails
@@ -211,6 +222,8 @@ export function createLocalBackend(): Backend {
     const transcript: Transcript = { language: isRtl(outSegs.map((x) => x.text).join(" ")) ? "ar" : "en", engine, segments: outSegs.sort((a, b) => a.start - b.start).map((s, i) => ({ id: i, start: s.start, end: s.end, text: s.text, words: s.words })) };
     await idbPut(`sug:${pid}`, sug);
     await idbPut(`tr:${pid}`, transcript);
+    await idbPut(`tr_src:${pid}`, { language: srcLang, engine, segments: [...segments].sort((a, b) => a.start - b.start).map((x, i) => ({ id: i, start: x.start, end: x.end, text: x.text, words: x.words })) } as Transcript);
+    await idbDelPrefix(`trx:${pid}:`);
     const d = load(); const p = projectOf(d, pid);
     p.status = "done"; p.last_error = null; p.updated_at = new Date().toISOString(); p.active_job_id = null;
     save(d);
@@ -266,7 +279,7 @@ export function createLocalBackend(): Backend {
       save(d);
       sources.delete(id);
       for (const k of [...urls.keys()]) if (k.includes(id)) { URL.revokeObjectURL(urls.get(k)!); urls.delete(k); }
-      await Promise.all([idbDel(`src:${id}`), idbDel(`srt:${id}`), idbDel(`sug:${id}`), idbDel(`tr:${id}`), idbDelPrefix(`thumb:${id}:`), ...gone.map((e) => idbDel(`exp:${e.id}`))]).catch(() => undefined);
+      await Promise.all([idbDel(`src:${id}`), idbDel(`srt:${id}`), idbDel(`sug:${id}`), idbDel(`tr:${id}`), idbDel(`tr_src:${id}`), idbDelPrefix(`trx:${id}:`), idbDelPrefix(`thumb:${id}:`), ...gone.map((e) => idbDel(`exp:${e.id}`))]).catch(() => undefined);
     },
     async uploadSource(pid, file, onProgress) {
       onProgress?.(0.1);
@@ -330,8 +343,18 @@ export function createLocalBackend(): Backend {
       }
       return sug;
     },
-    async transcript(pid) {
-      return (await idbGet<Transcript>(`tr:${pid}`).catch(() => undefined)) ?? { language: "ar", engine: "none", segments: [] };
+    async transcript(pid, lang, onProgress) {
+      const base = (await idbGet<Transcript>(`tr:${pid}`).catch(() => undefined)) ?? { language: "ar", engine: "none", segments: [] };
+      if (!lang || base.language === lang || !base.segments.length) return base;
+      const src = (await idbGet<Transcript>(`tr_src:${pid}`).catch(() => undefined)) ?? base;
+      if (src.language === lang) return src;
+      const cached = await idbGet<Transcript>(`trx:${pid}:${lang}`).catch(() => undefined);
+      if (cached) return cached;
+      const from = src.language === "ar" ? "ar" : "en";
+      const r = await translateSegs(src.segments, from, lang, [], onProgress ?? (() => undefined));
+      const t: Transcript = { language: lang, engine: src.engine, segments: r.segs.map((x, i) => ({ id: i, start: x.start, end: x.end, text: x.text, words: x.words })) };
+      await idbPut(`trx:${pid}:${lang}`, t);
+      return t;
     },
     mediaUrl: (pid) => { const b = sources.get(pid); if (b) return objUrl(`src:${pid}`, b); return load().projects.find((p) => p.id === pid)?.remote_url ?? ""; },
     thumbUrl: (pid, sid) => urls.get(`thumb:${pid}:${sid}`) ?? "",
@@ -363,7 +386,7 @@ export function createLocalBackend(): Backend {
       const file = remote ? null : await sourceOf(c.project_id);
       if (!file && !remote) throw new ApiException(409, "NO_SOURCE", "ملف الفيديو غير موجود في هذا المتصفح. ارفعه مرة أخرى.", "The video file is not stored in this browser. Upload it again.");
       const es = { ...c.edit_state, resolution };
-      const tr = await this.transcript(c.project_id);
+      const tr = await this.transcript(c.project_id, es.cap_lang === "ar" || es.cap_lang === "en" ? es.cap_lang : undefined);
       const words: WordT[] = es.words ?? tr.segments.flatMap((s) => s.words).filter((w) => w.end > es.start && w.start < es.end);
       const e: ExportItem = { id: uid("le_"), clip_id: cid, status: "running", job_id: null, resolution, size_bytes: null, duration: es.end - es.start, download_url: null };
       const job = startJob("export", c.project_id, async (report) => {
