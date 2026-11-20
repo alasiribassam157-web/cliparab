@@ -11,7 +11,9 @@ import { renderClip } from "./render";
 import { bestFrame, openVideo, thumbnail } from "./vision";
 
 const KEY = "cliparab.local.v1";
-const TRANSCRIBE_BUDGET = 20 * 60; // seconds of speech we transcribe at most (long videos: the best stretches)
+// Seconds of speech we transcribe at most; long videos get their most promising stretches only, so the wait
+// stays reasonable on an ordinary laptop.
+const TRANSCRIBE_BUDGET = 10 * 60;
 
 type LocalSuggestion = Suggestion & { center?: number };
 interface State {
@@ -370,8 +372,11 @@ export function createLocalBackend(): Backend {
   };
 }
 
-/** Fetch the bundled sample episode as a File, so visitors can try the full pipeline in one click. */
-export async function sampleFile(): Promise<File> {
-  const r = await fetch("/demo/source.mp4");
-  return new File([await r.blob()], "حلقة-نموذجية.mp4", { type: "video/mp4" });
+/**
+ * The bundled sample episode, so visitors can try the full pipeline in one click. Its soundtrack is synthetic
+ * (not real speech), so it ships with its subtitle file, which replaces speech recognition.
+ */
+export async function sampleFiles(): Promise<{ video: File; srt: File }> {
+  const [v, s] = await Promise.all([fetch("/demo/source.mp4"), fetch("/demo/source.srt")]);
+  return { video: new File([await v.blob()], "حلقة-نموذجية.mp4", { type: "video/mp4" }), srt: new File([await s.text()], "حلقة-نموذجية.srt", { type: "text/plain" }) };
 }

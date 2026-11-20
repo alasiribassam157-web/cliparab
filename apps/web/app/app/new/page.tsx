@@ -5,7 +5,7 @@ import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { Progress } from "@/components/ui";
 import { errorText, useBackend } from "@/lib/backend";
 import { useI18n } from "@/lib/i18n";
-import { sampleFile } from "@/lib/local/backend";
+import { sampleFiles } from "@/lib/local/backend";
 import { ApiException, type Backend, type Job } from "@/lib/types";
 
 /** Resolves when the job finishes; rejects with the job's own (localised) error if it fails. */
@@ -49,7 +49,7 @@ export default function NewProject() {
   const [sampling, setSampling] = useState(false);
   const pickSample = async () => {
     setSampling(true); setErr("");
-    try { const f = await sampleFile(); setFile(f); setSource("file"); if (!name) setName(locale === "ar" ? "حلقة نموذجية" : "Sample episode"); }
+    try { const f = await sampleFiles(); setFile(f.video); setSrt(f.srt); setSource("file"); if (!name) setName(locale === "ar" ? "حلقة نموذجية" : "Sample episode"); }
     catch (e) { setErr(errorText(e, locale)); }
     setSampling(false);
   };
@@ -116,6 +116,7 @@ export default function NewProject() {
       )}
       {backend.mode === "demo" && <p className="small muted" style={{ margin: 0 }}>{t(source === "url" ? "demo_url_note" : "demo_upload_note")}</p>}
       <label className="field">{t("pick_srt")}<input className="input" type="file" accept=".srt,.vtt,text/vtt" onChange={(e) => setSrt(e.target.files?.[0] ?? null)} /></label>
+      {srt && <span className="small muted" data-testid="srt-name">✓ {srt.name}</span>}
       {busy && <div><div className="small muted">{t(source === "url" ? "downloading" : "uploading")}</div><Progress value={frac} /></div>}
       {err && <div className="err" role="alert">{err}</div>}
       <button className="btn primary" disabled={busy || missing}>{t("start_analysis")}</button>

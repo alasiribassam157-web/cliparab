@@ -1,7 +1,9 @@
 /**
  * Speech recognition in the browser: Whisper via transformers.js, loaded from a CDN inside a module
  * Web Worker (the page stays responsive). The model is downloaded once and cached by the browser.
- * WebGPU uses whisper-small (better Arabic); without WebGPU it falls back to whisper-base on WASM.
+ * whisper-small, 8-bit, on WASM (≈250 MB, one download). whisper-base was tried on a real browser and is not
+ * usable for Arabic (garbled words, endless loops); WebGPU loading of whisper-small proved unreliable and needs
+ * a ~600 MB download, so it is not used. The site is cross-origin isolated so WASM can use all CPU threads.
  */
 import { interpolateWords, type Word } from "./engine";
 
@@ -20,7 +22,7 @@ self.onmessage = async (e) => {
       asr = await pipeline("automatic-speech-recognition", e.data.model, opts);
       self.postMessage({ id, type: "done" });
     } else if (type === "run") {
-      const out = await asr(e.data.pcm, { language: e.data.language, task: "transcribe", chunk_length_s: 30, stride_length_s: 5, return_timestamps: true });
+      const out = await asr(e.data.pcm, { language: e.data.language, task: "transcribe", chunk_length_s: 30, stride_length_s: 5, return_timestamps: true, no_repeat_ngram_size: 4 });
       self.postMessage({ id, type: "done", out });
     }
   } catch (err) {
@@ -60,6 +62,10 @@ class WhisperWorker {
 }
 
 let ready: Promise<WhisperWorker> | null = null;
+let device: "webgpu" | "wasm" | null = null;
+/** Which engine the loaded model runs on (null until loaded). */
+export const asrDevice = () => device;
+
 
 async function load(onProgress: Progress): Promise<WhisperWorker> {
   const files = new Map<string, [number, number]>();
@@ -70,15 +76,13 @@ async function load(onProgress: Progress): Promise<WhisperWorker> {
     files.forEach(([l, t]) => { a += l; b += t; });
     if (b) onProgress("model", a / b);
   };
-  const tryDevice = async (device: "webgpu" | "wasm", model: string) => {
+  const tryDevice = async (dev: "webgpu" | "wasm", model: string) => {
     const w = new WhisperWorker();
-    try { await w.call({ type: "load", device, model }, [], report); return w; } catch (e) { w.terminate(); throw e; }
+    try { await w.call({ type: "load", device: dev, model }, [], report); return w; } catch (e) { w.terminate(); throw e; }
   };
-  const gpu = typeof navigator !== "undefined" && "gpu" in navigator && !!(await (navigator as unknown as { gpu: { requestAdapter(): Promise<unknown> } }).gpu.requestAdapter().catch(() => null));
-  if (gpu) {
-    try { return await tryDevice("webgpu", "onnx-community/whisper-small"); } catch { /* fall back to WASM */ }
-  }
-  return tryDevice("wasm", "onnx-community/whisper-base");
+  const w = await tryDevice("wasm", "onnx-community/whisper-small");
+  device = "wasm";
+  return w;
 }
 
 function clean(chunks: { timestamp: [number, number | null]; text: string }[], offset: number, total: number): AsrSegment[] {
@@ -86,6 +90,9 @@ function clean(chunks: { timestamp: [number, number | null]; text: string }[], o
   for (const c of chunks) {
     const text = c.text.trim();
     if (!text || HALLUCINATIONS.some((h) => text.toLowerCase().includes(h))) continue;
+    if (/(.)\1{5,}/u.test(text)) continue; // "أأأأأأ…": decoder stuck on one token
+    const toks = text.split(/\s+/);
+    if (toks.length >= 6 && new Set(toks).size / toks.length < 0.35) continue; // "المنطقة المنطقة المنطقة…"
     if (out.length && out[out.length - 1].text === text) continue; // whisper loops on silence
     const start = offset + (c.timestamp[0] ?? 0);
     const end = offset + (c.timestamp[1] ?? Math.min(total, (c.timestamp[0] ?? 0) + 5));
@@ -100,7 +107,7 @@ export async function transcribe(pcm: Float32Array, offset: number, onProgress: 
   if (typeof window !== "undefined" && window.__CLIPARAB_ASR__) return window.__CLIPARAB_ASR__(pcm, offset);
   ready ??= load(onProgress).catch((e) => { ready = null; throw e; });
   const w = await ready;
-  const PIECE = 16000 * 240; // 4-minute pieces give regular progress updates
+  const PIECE = 16000 * 90; // short pieces give regular progress updates
   const segs: AsrSegment[] = [];
   for (let i = 0; i < pcm.length; i += PIECE) {
     const piece = pcm.slice(i, i + PIECE);

@@ -38,7 +38,7 @@ for (const [label, file] of [["30-min MP4, index at end", mp4], ["WebM fallback"
     const calls = await page.evaluate(() => window.__asrCalls);
     const total = calls.reduce((a, c) => a + c[1], 0);
     check(`${label}: clips suggested`, cards >= 3 && !err, `cards=${cards} in ${((Date.now() - t0) / 1000).toFixed(1)}s ${err ?? ""}`);
-    if (label.startsWith("30")) check(`${label}: only ~20 min transcribed, spread over the video`, total <= 1260 && total >= 900 && calls.length >= 6 && calls[calls.length - 1][0] > 1200, JSON.stringify(calls));
+    if (label.startsWith("30")) check(`${label}: only ~10 min transcribed, spread over the video`, total <= 660 && total >= 450 && calls.length >= 3 && calls[0][0] < 600 && calls[calls.length - 1][0] > 1200, JSON.stringify(calls));
     else check(`${label}: whole short file transcribed`, Math.abs(total - 240) < 3, JSON.stringify(calls));
     const starts = await page.locator(".clip-card").evaluateAll((els) => els.map((e) => e.textContent.match(/(\d+:\d\d) – (\d+:\d\d)/)?.[0]));
     console.log("   clips:", starts.join(", "));

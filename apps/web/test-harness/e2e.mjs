@@ -40,6 +40,7 @@ try {
   await shot("01-landing");
 
   await page.goto(base + "/app/new");
+  check("page is cross-origin isolated (multi-threaded speech model)", await page.evaluate(() => self.crossOriginIsolated === true));
   check("free in-browser banner", (await page.locator(".banner.ok").textContent()).includes("داخل متصفحك"));
   await page.getByRole("button", { name: "من رابط" }).click();
   check("link mode explains it needs a server and cannot submit", (await page.textContent("form")).includes("يحتاج خادمًا") && await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
@@ -47,7 +48,12 @@ try {
   check("cannot start without a file", await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
   await page.getByRole("button", { name: "جرّب على حلقة نموذجية" }).click();
   await page.waitForFunction(() => document.querySelector(".drop b")?.textContent?.includes(".mp4"), null, { timeout: 15000 });
+  check("sample button attaches the sample and its subtitles", (await page.locator('[data-testid="srt-name"]').textContent()).includes(".srt"));
   await shot("02-new-sample");
+  // run the speech-recognition path: same video uploaded as a plain file, no subtitles
+  await page.goto(base + "/app/new");
+  await page.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
+  await page.locator("input.input").first().fill("حلقة نموذجية");
   await page.getByRole("button", { name: "ابدأ التحليل" }).click();
   await page.waitForURL(/\/app\/p\//, { timeout: 15000 });
   await page.waitForSelector('[data-testid="processing"]', { timeout: 5000 }).then(() => check("processing screen shows", true)).catch(() => check("processing screen shows", false));

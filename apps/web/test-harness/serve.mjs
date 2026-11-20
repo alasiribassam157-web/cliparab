@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const roots = [path.join(here, "dist"), path.join(here, "..", "public")];
+const iso = { "Cross-Origin-Opener-Policy": "same-origin", "Cross-Origin-Embedder-Policy": "credentialless" };
 const types = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".mp4": "video/mp4" };
 export function serve(port = 0) {
   const server = http.createServer((req, res) => {
@@ -18,10 +19,10 @@ export function serve(port = 0) {
     if (range) {
       const [s, e] = range.replace("bytes=", "").split("-");
       const start = Number(s), end = e ? Number(e) : stat.size - 1;
-      res.writeHead(206, { "Content-Type": type, "Content-Range": `bytes ${start}-${end}/${stat.size}`, "Accept-Ranges": "bytes", "Content-Length": end - start + 1 });
+      res.writeHead(206, { ...iso, "Content-Type": type, "Content-Range": `bytes ${start}-${end}/${stat.size}`, "Accept-Ranges": "bytes", "Content-Length": end - start + 1 });
       fs.createReadStream(file, { start, end }).pipe(res);
     } else {
-      res.writeHead(200, { "Content-Type": type, "Content-Length": stat.size, "Accept-Ranges": "bytes" });
+      res.writeHead(200, { ...iso, "Content-Type": type, "Content-Length": stat.size, "Accept-Ranges": "bytes" });
       fs.createReadStream(file).pipe(res);
     }
   });
