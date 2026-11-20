@@ -92,18 +92,23 @@ export async function renderClip(src: string, es: EditState, words: WordT[], onP
   await actx.resume().catch(() => undefined);
   const dest = actx.createMediaStreamDestination();
   const srcNode = actx.createMediaElementSource(v); // not connected to the speakers: export is silent for the user
+  // speech levelling (≈ the server's loudnorm): an automatic gain steers the level toward −18 dBFS RMS while the
+  // clip plays (quiet recordings are lifted, loud ones brought down), and a limiter keeps peaks from clipping
+  const mkAgc = (analyser: AnalyserNode, gain: GainNode) => ({ analyser, gain, buf: new Float32Array(analyser.fftSize) });
+  let agc: ReturnType<typeof mkAgc> | null = null;
   if (es.loudnorm !== false) {
-    // speech levelling: lift quiet recordings, keep loud ones from clipping (≈ the server's loudnorm)
-    const comp = actx.createDynamicsCompressor();
-    comp.threshold.value = -32; comp.knee.value = 12; comp.ratio.value = 5; comp.attack.value = 0.005; comp.release.value = 0.25;
-    const makeup = actx.createGain();
-    makeup.gain.value = 2.6;
+    const analyser = actx.createAnalyser();
+    analyser.fftSize = 2048;
+    const gain = actx.createGain();
     const limiter = actx.createDynamicsCompressor();
-    limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.001; limiter.release.value = 0.1;
-    srcNode.connect(comp).connect(makeup).connect(limiter).connect(dest);
+    limiter.threshold.value = -3; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.002; limiter.release.value = 0.12;
+    srcNode.connect(analyser);
+    srcNode.connect(gain).connect(limiter).connect(dest);
+    agc = mkAgc(analyser, gain);
   } else {
     srcNode.connect(dest);
   }
+  let level = 0;
 
   await seek(v, es.start);
   drawFrame(ctx, v, W, H, es);
@@ -118,6 +123,17 @@ export async function renderClip(src: string, es: EditState, words: WordT[], onP
   let raf = 0;
   const finish = () => { if (rec.state !== "inactive") rec.stop(); v.pause(); cancelAnimationFrame(raf); };
   const tick = () => {
+    if (agc) {
+      agc.analyser.getFloatTimeDomainData(agc.buf);
+      let s = 0;
+      for (let i = 0; i < agc.buf.length; i++) s += agc.buf[i] * agc.buf[i];
+      const rms = Math.sqrt(s / agc.buf.length);
+      if (rms > 0.004) { // ignore pauses so silence is not pumped up
+        level = level ? level * 0.92 + rms * 0.08 : rms;
+        const want = Math.min(8, Math.max(0.25, 0.126 / level)); // 0.126 ≈ −18 dBFS
+        agc.gain.gain.setTargetAtTime(want, actx.currentTime, 0.3);
+      }
+    }
     drawFrame(ctx, v, W, H, es);
     if (events.length) drawCaptions(ctx, W, H, es, events, v.currentTime, family);
     onProgress(Math.min(0.99, (v.currentTime - es.start) / dur));
