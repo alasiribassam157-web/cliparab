@@ -8,12 +8,15 @@ import { AudioUnsupported, energyPeaks, openAudio, pickSpans, type AudioSource }
 import { parseSubtitles, suggestClips, type Word } from "./engine";
 import { idbClear, idbDel, idbDelPrefix, idbGet, idbPut } from "./idb";
 import { renderClip } from "./render";
+import { holdScreen } from "./wakelock";
 import { bestFrame, openVideo, thumbnail } from "./vision";
 
 const KEY = "cliparab.local.v1";
 // Seconds of speech we transcribe at most; long videos get their most promising stretches only, so the wait
 // stays reasonable on an ordinary laptop.
 const TRANSCRIBE_BUDGET = 10 * 60;
+// phones are several times slower and may be suspended: transcribe only the 3 most promising minutes
+const PHONE_BUDGET = 3 * 60;
 
 type LocalSuggestion = Suggestion & { center?: number };
 interface State {
@@ -84,7 +87,8 @@ export function createLocalBackend(): Backend {
       running.set(job.id, { ...cur, stage, progress: Math.max(cur.progress, Math.min(0.999, f)) });
       if (now - last > 1500) { last = now; setJob(running.get(job.id)!); }
     };
-    work(report).then((result) => {
+    const release = holdScreen();
+    work(report).finally(() => { void release.then((r) => r()); }).then((result) => {
       setJob({ ...running.get(job.id)!, status: "done", progress: 1, stage: "done", result });
     }).catch((e: unknown) => {
       const f = e instanceof Fail ? e : new Fail("JOB_FAILED", `فشلت المعالجة: ${e instanceof Error ? e.message : String(e)}`, `Processing failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -128,9 +132,8 @@ export function createLocalBackend(): Backend {
       spans = [segments.flatMap((s) => s.words)];
     } else {
       if (!audio) throw new Fail("AUDIO_UNSUPPORTED", "تعذّر قراءة صوت هذا الفيديو في المتصفح. جرّب ملف MP4 (H.264/AAC)، أو أرفق ملف ترجمة SRT.", "Could not read this video's audio in the browser. Try an MP4 (H.264/AAC) file, or attach an SRT subtitle file.");
-      if (isPhoneOrTablet()) throw new Fail("PHONE_NO_ASR", "تفريغ الكلام يحتاج كمبيوتر: متصفح الجوال لا يتحمّل نموذج التفريغ (250 ميجابايت) ويوقف العمل عند الخروج من الصفحة. افتح الموقع من كمبيوتر بمتصفح Chrome أو Edge، أو أرفق ملف ترجمة SRT للفيديو.", "Speech recognition needs a computer: phone browsers cannot hold the 250 MB speech model and stop work when you leave the page. Open the site on a computer with Chrome or Edge, or attach an SRT subtitle file.");
       engine = "whisper-browser";
-      const picks = pickSpans(env, audio.duration || duration, TRANSCRIBE_BUDGET);
+      const picks = pickSpans(env, audio.duration || duration, isPhoneOrTablet() ? PHONE_BUDGET : TRANSCRIBE_BUDGET);
       const total = picks.reduce((a, [s, e]) => a + (e - s), 0) || 1;
       let done = 0;
       for (const [s, e] of picks) {
@@ -199,7 +202,11 @@ export function createLocalBackend(): Backend {
       // a page reload stops in-browser processing: surface that instead of an endless spinner
       let changed = false;
       for (const p of d.projects) if (p.status === "processing" && !(p.active_job_id && running.has(p.active_job_id))) {
-        p.status = "ready"; p.last_error = { ar: "توقفت المعالجة لأن الصفحة أُغلقت أو أُعيد تحميلها. اضغط «ابدأ التحليل» مرة أخرى.", en: "Processing stopped because the page was closed or reloaded. Start the analysis again." }; changed = true;
+        p.status = "ready";
+        p.last_error = isPhoneOrTablet()
+          ? { ar: "توقفت المعالجة: غالبًا خرجت من الصفحة أو أغلق الجوال المتصفح لأن ذاكرته امتلأت. جرّب مرة أخرى مع إبقاء الشاشة مفتوحة، أو استخدم كمبيوتر، أو أرفق ملف ترجمة SRT.", en: "Processing stopped: you probably left the page, or the phone closed the browser because it ran out of memory. Try again keeping the screen on, use a computer, or attach an SRT file." }
+          : { ar: "توقفت المعالجة لأن الصفحة أُغلقت أو أُعيد تحميلها. اضغط «ابدأ التحليل» مرة أخرى.", en: "Processing stopped because the page was closed or reloaded. Start the analysis again." };
+        changed = true;
       }
       if (changed) save(d);
       return [...d.projects].reverse();

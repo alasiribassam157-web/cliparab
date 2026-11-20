@@ -33,15 +33,25 @@ try {
   check("SRT import gives clips without any speech model", n >= 2 && !requests.some((u) => u.includes("huggingface") || u.includes("jsdelivr")), `cards=${n} external=${requests.length}`);
   await page.getByRole("button", { name: "النص" }).click();
   check("transcript comes from the subtitle file", (await page.textContent("body")).includes("هل تعرف لماذا يفشل"));
-  // phone: clear note up front, and a clear message instead of a crash when there are no subtitles
-  const phone = await (await browser.newContext({ locale: "ar", userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 } })).newPage();
+  // phone: honest note up front, and analysis works (3-minute budget) with the screen kept on
+  const pctx = await browser.newContext({ locale: "ar", userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  await pctx.addInitScript(() => {
+    window.__asrCalls = [];
+    window.__CLIPARAB_ASR__ = async (pcm, offset) => {
+      window.__asrCalls.push(pcm.length / 16000);
+      const d = await (await fetch("/demo/demo.json")).json(); const end = offset + pcm.length / 16000;
+      return d.transcript.segments.filter((s) => s.start >= offset && s.start < end).map((s) => ({ start: s.start, end: s.end, text: s.text, words: s.words }));
+    };
+  });
+  const phone = await pctx.newPage();
   await phone.goto(base + "/app/new");
-  check("phone sees that speech analysis needs a computer", (await phone.locator('[data-testid="phone-note"]').textContent()).includes("كمبيوتر"));
+  check("phone sees an honest note (model size, keep screen on)", (await phone.locator('[data-testid="phone-note"]').textContent()).includes("خلّ الشاشة مفتوحة"));
   await phone.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
   await phone.locator("input.input").first().fill("phone");
   await phone.getByRole("button", { name: "ابدأ التحليل" }).click();
-  await phone.waitForSelector(".err[role=alert]", { timeout: 60000 });
-  check("phone without SRT gets a clear Arabic reason, not a hang", (await phone.locator(".err[role=alert]").textContent()).includes("يحتاج كمبيوتر"));
+  await phone.waitForSelector(".clip-card, .err[role=alert]", { timeout: 90000 });
+  const secs = await phone.evaluate(() => window.__asrCalls.reduce((a, b) => a + b, 0));
+  check("analysis now works on a phone", (await phone.locator(".clip-card").count()) >= 2 && secs > 100, `transcribed=${secs.toFixed(0)}s`);
 } catch (e) { check("exception", false, e.message); }
 check("no page errors", problems.length === 0, problems.join(" | "));
 await browser.close(); server.close();

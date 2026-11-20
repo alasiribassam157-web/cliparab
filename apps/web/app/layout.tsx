@@ -9,8 +9,10 @@ const font = Tajawal({ subsets: ["arabic", "latin"], weight: ["400", "500", "700
 export const metadata: Metadata = {
   title: "ClipArab — مقاطع قصيرة من فيديوهاتك الطويلة",
   description: "منصة عربية تحوّل الفيديو الطويل إلى مقاطع قصيرة جاهزة لـ TikTok وReels وShorts، بترجمة عربية سليمة ومجانًا بلا علامة مائية.",
+  icons: { icon: "/icons/icon-192.png", apple: "/icons/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "ClipArab", statusBarStyle: "black-translucent" },
 };
-export const viewport: Viewport = { themeColor: "#4f46e5", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#4f46e5", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 const themeInit = `try{var t=localStorage.getItem('cliparab.theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}`;
 

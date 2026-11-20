@@ -1,0 +1,206 @@
+[
+ {
+  "name": "01-landing",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [
+   "showcase-item [-140,109]",
+   "phone showcase-phone [-140,109]",
+   "fill [-133,102]",
+   "VIDEO [-133,102]",
+   "cap bottom [-119,88]",
+   "line [-119,88]",
+   "w [-13,13]",
+   "w [-63,-13]",
+   "w [-94,-63]",
+   "w [-27,38]",
+   "w [-92,-27]",
+   "showcase-score [-123,-95]"
+  ],
+  "small": [
+   "▶ClipArab 118x31"
+  ]
+ },
+ {
+  "name": "02-dashboard-empty",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44"
+  ]
+ },
+ {
+  "name": "03-new",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44"
+  ]
+ },
+ {
+  "name": "04-processing",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44"
+  ]
+ },
+ {
+  "name": "05-project",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44"
+  ]
+ },
+ {
+  "name": "06-project-why",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44"
+  ]
+ },
+ {
+  "name": "07-editor",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [
+   "tab [-32,46]"
+  ],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44",
+   "seek 188x34",
+   "البداية 316x34",
+   "النهاية 316x34"
+  ]
+ },
+ {
+  "name": "08-editor-القص",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [
+   "tab [-32,46]"
+  ],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44",
+   "seek 188x34",
+   "البداية 316x34",
+   "النهاية 316x34"
+  ]
+ },
+ {
+  "name": "08-editor-التخطيط",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [
+   "tab [-32,46]"
+  ],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44",
+   "seek 188x34"
+  ]
+ },
+ {
+  "name": "08-editor-الترجمة",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [
+   "tab [-32,46]"
+  ],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44",
+   "seek 188x34",
+   "INPUT 22x22",
+   "INPUT 316x34",
+   "INPUT 22x22"
+  ]
+ },
+ {
+  "name": "08-editor-النص",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [
+   "tab [-32,46]"
+  ],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44",
+   "seek 188x34",
+   "هل 41x36",
+   "تعرف 58x36",
+   "لماذا 51x36",
+   "يفشل 59x36",
+   "أغلب 54x36",
+   "الناس 59x36",
+   "في 41x36",
+   "بناء 42x36",
+   "عادة 50x36",
+   "القراءة؟ 75x36",
+   "السبب 64x36",
+   "ليس 50x36"
+  ]
+ },
+ {
+  "name": "08-editor-التصدير",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [
+   "tab [356,421]"
+  ],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44",
+   "seek 188x34"
+  ]
+ },
+ {
+  "name": "09-dashboard",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44"
+  ]
+ },
+ {
+  "name": "10-settings",
+  "scrollW": 390,
+  "W": 390,
+  "headerH": 57,
+  "bad": [],
+  "small": [
+   "▶ClipArab 30x30",
+   "المظهر 31x44",
+   "INPUT 22x22"
+  ]
+ }
+]

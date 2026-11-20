@@ -111,7 +111,7 @@ export default function NewProject() {
           <p className="small muted" style={{ margin: 0 }}>{t(local ? "url_local_note" : "url_hint")}</p>
         </div>
       )}
-      {local && phone && <div className="err" role="note" data-testid="phone-note">{t("phone_note")}</div>}
+      {local && phone && <div className="note" role="note" data-testid="phone-note">{t("phone_note")}</div>}
       {local && source === "file" && (
         <div className="row" style={{ gap: 8 }}>
           <button type="button" className="btn sm" onClick={pickSample} disabled={busy || sampling}>{sampling ? t("sample_loading") : t("try_sample")}</button>

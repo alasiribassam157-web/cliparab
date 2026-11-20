@@ -38,6 +38,7 @@ function ClipCard({ s, pid, onEdit, busy }: { s: Suggestion; pid: string; onEdit
           <span className="clip-thumb-fallback">▶</span>
         )}
         <span className="clip-thumb-time" dir="ltr">{fmtDuration(s.duration)}</span>
+        <span className="clip-thumb-score" aria-hidden>{Math.round(s.total)}</span>
       </div>
       <ScoreRing value={s.total} />
       <div>

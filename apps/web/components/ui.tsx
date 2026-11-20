@@ -11,7 +11,7 @@ export function Logo() {
   return (
     <Link href="/" className="logo" aria-label="ClipArab">
       <span className="logo-mark" aria-hidden>▶</span>
-      <span>ClipArab</span>
+      <span className="logo-word">ClipArab</span>
     </Link>
   );
 }
@@ -51,13 +51,13 @@ export function Shell({ children, authed = false }: { children: ReactNode; authe
     <>
       {backend.mode === "demo" && <div className="banner"><div className="container">{t("demo_banner")}</div></div>}
       {backend.mode === "local" && <div className="banner ok"><div className="container">{t("local_banner")}</div></div>}
-      <header className="topbar">
+      <header className={authed ? "topbar authed" : "topbar"}>
         <div className="container">
           <Logo />
           {authed && (
             <nav className="nav" aria-label="main">
               <Link href="/app" aria-current={path === "/app" ? "page" : undefined}>{t("nav_projects")}</Link>
-              <Link href="/app/settings" aria-current={path.startsWith("/app/settings") ? "page" : undefined}>{t("nav_settings")}</Link>
+              <Link href="/app/settings" aria-current={path.startsWith("/app/settings") ? "page" : undefined} aria-label={t("nav_settings")}><span className="nav-label">{t("nav_settings")}</span><span className="nav-icon" aria-hidden>⚙︎</span></Link>
             </nav>
           )}
           <span className="grow" />
