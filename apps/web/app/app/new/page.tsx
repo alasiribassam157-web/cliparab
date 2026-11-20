@@ -29,6 +29,7 @@ export default function NewProject() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [lang, setLang] = useState("ar");
+  const [toAr, setToAr] = useState(true);
   const [source, setSource] = useState<"file" | "url">("file");
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -68,7 +69,7 @@ export default function NewProject() {
     let hasSource = false;
     try {
       const fallback = source === "url" ? (locale === "ar" ? "فيديو من رابط" : "Video from link") : file?.name || "مشروع";
-      const p = await backend.createProject(name.trim() || fallback, lang);
+      const p = await backend.createProject(name.trim() || fallback, lang === "en" && toAr ? "en>ar" : lang);
       createdId = p.id;
       if (source === "url") {
         const job = await backend.importUrl(p.id, url.trim());
@@ -112,12 +113,21 @@ export default function NewProject() {
           <p className="small muted" style={{ margin: 0 }}>{t(local ? "url_local_note" : "url_hint")}</p>
         </div>
       )}
-      <label className="field">{t("lang_label")}
-        <select className="input" value={lang} onChange={(e) => setLang(e.target.value)} disabled={busy} data-testid="lang">
-          <option value="ar">العربية</option><option value="en">English</option>
-        </select>
-        <span className="small muted" style={{ fontWeight: 400 }}>{t("lang_note")}</span>
-      </label>
+      <div className="field">
+        <b>{t("lang_label")}</b>
+        <div className="seg" role="group" aria-label={t("lang_label")} data-testid="lang">
+          <button type="button" aria-pressed={lang === "ar"} onClick={() => setLang("ar")} disabled={busy}>العربية</button>
+          <button type="button" aria-pressed={lang === "en"} onClick={() => setLang("en")} disabled={busy}>English</button>
+        </div>
+        {lang === "en" && (<>
+          <b style={{ marginTop: 8 }}>{t("cap_lang")}</b>
+          <div className="seg" role="group" aria-label={t("cap_lang")} data-testid="cap-lang">
+            <button type="button" aria-pressed={toAr} onClick={() => setToAr(true)} disabled={busy}>{t("cap_ar_tr")}</button>
+            <button type="button" aria-pressed={!toAr} onClick={() => setToAr(false)} disabled={busy}>English</button>
+          </div>
+        </>)}
+        <span className="small muted" style={{ fontWeight: 400 }}>{lang === "en" && toAr ? t("tr_note") : t("lang_note")}</span>
+      </div>
       {local && source === "file" && <p className="small muted" style={{ margin: 0 }} data-testid="upload-first">{t("upload_first")}</p>}
       {local && phone && <div className="note" role="note" data-testid="phone-note">{t("phone_note")}</div>}
       {local && source === "file" && (

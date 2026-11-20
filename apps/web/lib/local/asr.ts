@@ -12,7 +12,7 @@ const TRANSFORMERS = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3";
 const WORKER_SRC = `
 import { pipeline, env } from "${TRANSFORMERS}";
 env.allowLocalModels = false;
-let asr = null;
+let asr = null, mt = null;
 self.onmessage = async (e) => {
   const { id, type } = e.data;
   try {
@@ -23,6 +23,19 @@ self.onmessage = async (e) => {
       opts.dtype = e.data.device === "webgpu" ? { encoder_model: "fp32", decoder_model_merged: "q4" } : "q8";
       asr = await pipeline("automatic-speech-recognition", e.data.model, opts);
       self.postMessage({ id, type: "done" });
+    } else if (type === "mt") {
+      if (!mt) {
+        if (!asr && self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 2));
+        mt = await pipeline("translation", e.data.model, { device: "wasm", dtype: "q8", progress_callback: (p) => self.postMessage({ id, type: "progress", p }) });
+      }
+      const out = [];
+      for (const t of e.data.texts) {
+        let r = "";
+        try { r = t.trim() ? (await mt(t, { max_new_tokens: 256, num_beams: e.data.beams || 1 }))[0].translation_text : ""; } catch (err) { r = ""; }
+        out.push(r);
+        self.postMessage({ id, type: "progress", p: { status: "mt", progress: out.length / e.data.texts.length } });
+      }
+      self.postMessage({ id, type: "done", out });
     } else if (type === "run") {
       const out = await asr(e.data.pcm, { language: e.data.language, task: "transcribe", chunk_length_s: 30, stride_length_s: 5, return_timestamps: true, no_repeat_ngram_size: 4 });
       self.postMessage({ id, type: "done", out });
@@ -37,7 +50,7 @@ type Progress = (stage: "model" | "transcribe", f: number) => void;
 
 /** Tests (and future engines) can replace recognition: window.__CLIPARAB_ASR__(pcm16k, offsetSeconds) → segments. */
 type Override = (pcm: Float32Array, offset: number) => Promise<AsrSegment[]>;
-declare global { interface Window { __CLIPARAB_ASR__?: Override } }
+declare global { interface Window { __CLIPARAB_ASR__?: Override; __CLIPARAB_MT__?: (texts: string[]) => Promise<string[]> } }
 
 const HALLUCINATIONS = ["نانسي قنقر", "ترجمة نانسي", "اشتركوا في القناة", "شكرا للمشاهدة", "subtitles by", "amara.org"];
 
@@ -149,4 +162,52 @@ export async function transcribe(pcm: Float32Array, offset: number, onProgress: 
     onProgress("transcribe", Math.min(1, (i + PIECE) / pcm.length));
   }
   return segs;
+}
+
+/**
+ * English → Arabic translation in the browser (Helsinki-NLP OPUS-MT en-ar, 8-bit ONNX, ≈110 MB, downloaded once).
+ * Runs in the same worker as Whisper on computers; on phones the speech model is released first to save memory.
+ * An empty string comes back for any sentence the model could not translate.
+ */
+export async function translateToArabic(texts: string[], onProgress: (f: number) => void): Promise<string[]> {
+  if (typeof window !== "undefined" && window.__CLIPARAB_MT__) return window.__CLIPARAB_MT__(texts);
+  let w: WhisperWorker;
+  if (ready && !isPhoneOrTablet()) w = await ready;
+  else {
+    if (ready) { (await ready.catch(() => null))?.terminate(); ready = null; device = null; }
+    w = new WhisperWorker();
+  }
+  const files = new Map<string, [number, number]>();
+  let dl = 0, tr = 0;
+  const push = () => onProgress(Math.min(1, 0.3 * dl + 0.7 * tr));
+  const out = await w.call<string[]>({ type: "mt", model: "Xenova/opus-mt-en-ar", texts, beams: isPhoneOrTablet() ? 1 : 3 }, [], (p) => {
+    if (p.status === "progress" && p.file) {
+      files.set(p.file, [p.loaded ?? 0, p.total ?? 0]);
+      let a = 0, b = 0; files.forEach(([l, t]) => { a += l; b += t; });
+      if (b) { dl = a / b; push(); }
+    } else if (p.status === "mt") { dl = 1; tr = p.progress ?? tr; push(); }
+  });
+  if (!ready) w.terminate();
+  return out;
+}
+
+/**
+ * Translation units: Whisper segments, with a short fragment that does not end a sentence merged into the next
+ * one, so the translator sees whole sentences (better Arabic) while clip boundaries still fall on unit edges.
+ */
+export function sentenceUnits(segs: AsrSegment[]): AsrSegment[] {
+  const out: AsrSegment[] = [];
+  let cur: AsrSegment | null = null;
+  for (const s of [...segs].sort((a, b) => a.start - b.start)) {
+    if (cur && !/[.?!…]["')\]]*$/.test(cur.text.trim()) && cur.text.split(/\s+/).length < 7 && s.start - cur.end < 1.2 && s.end - cur.start < 20) {
+      cur = { start: cur.start, end: s.end, text: `${cur.text.trim()} ${s.text.trim()}`, words: [...cur.words, ...s.words] };
+    } else { if (cur) out.push(cur); cur = { ...s }; }
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** Tidy model output for captions: no doubled spaces, Arabic comma/question mark, no stray Latin quotes. */
+export function tidyArabic(t: string): string {
+  return t.replace(/\s+/g, " ").replace(/\s+([،؟.!:])/g, "$1").replace(/,/g, "،").replace(/\?/g, "؟").replace(/^["'«]+|["'»]+$/g, "").trim();
 }

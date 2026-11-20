@@ -3,9 +3,9 @@
  * Source videos, thumbnails, transcripts and exports live in IndexedDB; small records in localStorage.
  */
 import { ApiException, type Backend, type Clip, type EditState, type ExportItem, type Job, type Project, type ReviewPage, type Suggestion, type Transcript, type User, type WordT } from "../types";
-import { isPhoneOrTablet, transcribe } from "./asr";
+import { isPhoneOrTablet, sentenceUnits, tidyArabic, transcribe, translateToArabic } from "./asr";
 import { AudioUnsupported, energyPeaks, openAudio, pickSpans, type AudioSource } from "./audio";
-import { parseSubtitles, suggestClips, type Word } from "./engine";
+import { interpolateWords, parseSubtitles, suggestClips, type Word } from "./engine";
 import { idbClear, idbDel, idbDelPrefix, idbGet, idbPut } from "./idb";
 import { renderClip } from "./render";
 import { holdScreen } from "./wakelock";
@@ -139,7 +139,8 @@ export function createLocalBackend(): Backend {
       const total = picks.reduce((a, [s, e]) => a + (e - s), 0) || 1;
       let done = 0;
       // language: what the user chose, or auto-detected by the model; once the first stretch reads as Arabic, lock it for the rest
-      let lang: string | undefined = WHISPER_LANG[p0.language] ?? (p0.language in WHISPER_LANG ? undefined : "arabic");
+      const speechLang = (p0.language || "ar").split(">")[0];
+      let lang: string | undefined = WHISPER_LANG[speechLang] ?? (speechLang in WHISPER_LANG ? undefined : "arabic");
       for (const [s, e] of picks) {
         const pcm = await audio.pcm(s, e);
         let segs;
@@ -161,6 +162,21 @@ export function createLocalBackend(): Backend {
     report("score", 0.82);
     let sug: LocalSuggestion[] = suggestClips({ spans, duration, maxClips, lang: isRtl(segments.map((x) => x.text).join(" ")) ? "ar" : "en", rmsDb: env.length ? env : null, peaks: energyPeaks(env) });
     if (!sug.length) throw new Fail("NO_CLIPS", "الكلام في الفيديو قصير جدًا لاقتراح مقاطع (نحتاج جملًا متصلة مدتها 15 ثانية على الأقل).", "The speech is too short to suggest clips (we need at least 15 s of connected sentences).");
+
+    // 3b) English speech with Arabic captions: translate sentence by sentence, then time the Arabic words over each sentence
+    const capTo = (p0.language || "").split(">")[1];
+    let outSegs: { start: number; end: number; text: string; words: Word[] }[] = segments;
+    if (capTo === "ar" && !isRtl(segments.map((x) => x.text).join(" "))) {
+      report("translate", 0.83);
+      const units = sentenceUnits(segments);
+      const titles = sug.map((x) => x.title.replace(/…$/, ""));
+      let ar: string[];
+      try { ar = (await translateToArabic([...units.map((u) => u.text), ...titles], (f) => report("translate", 0.83 + 0.05 * f))).map(tidyArabic); }
+      catch (err) { console.warn("[cliparab] translation failed", err); throw new Fail("TRANSLATE", "تعذّر تحميل نموذج الترجمة. تأكد من الاتصال بالإنترنت ثم أعد المحاولة.", "The translation model could not be loaded. Check your connection and try again."); }
+      outSegs = units.map((u, i) => ({ start: u.start, end: u.end, text: ar[i] || u.text, words: interpolateWords(ar[i] || u.text, u.start, u.end, 0.85) }));
+      sug = sug.map((x, j) => ({ ...x, title: ar[units.length + j] || x.title, emphasis: [],
+        text: outSegs.filter((u) => u.end > x.start + 0.2 && u.start < x.end - 0.2).map((u) => u.text).join(" ") || x.text }));
+    }
 
     // 4) best frame + subject centre per clip, visual score, thumbnails
     report("preview", 0.88);
@@ -192,7 +208,7 @@ export function createLocalBackend(): Backend {
     if (v) closeVideo(v);
     for (const k of [...urls.keys()]) if (k.startsWith(`thumb:${pid}:`)) { URL.revokeObjectURL(urls.get(k)!); urls.delete(k); }
 
-    const transcript: Transcript = { language: isRtl(segments.map((x) => x.text).join(" ")) ? "ar" : (p0.language !== "auto" && p0.language !== "ar" ? p0.language : "en"), engine, segments: segments.sort((a, b) => a.start - b.start).map((s, i) => ({ id: i, start: s.start, end: s.end, text: s.text, words: s.words })) };
+    const transcript: Transcript = { language: isRtl(outSegs.map((x) => x.text).join(" ")) ? "ar" : "en", engine, segments: outSegs.sort((a, b) => a.start - b.start).map((s, i) => ({ id: i, start: s.start, end: s.end, text: s.text, words: s.words })) };
     await idbPut(`sug:${pid}`, sug);
     await idbPut(`tr:${pid}`, transcript);
     const d = load(); const p = projectOf(d, pid);

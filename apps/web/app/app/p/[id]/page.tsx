@@ -9,7 +9,7 @@ import { useI18n } from "@/lib/i18n";
 import type { Job, Project, Suggestion, Transcript } from "@/lib/types";
 import { useUser } from "@/lib/user";
 
-const STAGES = ["probe", "transcribe", "segment", "score", "preview"] as const;
+const STAGES = ["probe", "transcribe", "segment", "score", "translate", "preview"] as const;
 
 function ClipCard({ s, pid, onEdit, busy, top }: { s: Suggestion; pid: string; onEdit: (s: Suggestion) => void; busy: boolean; top?: boolean }) {
   const { t } = useI18n();
@@ -154,7 +154,7 @@ export default function ProjectPage() {
       <div className="row spread">
         <div>
           <h1 style={{ margin: 0 }}>{project.name}</h1>
-          {(project.language === "en" || project.language === "ar") && <span className="chip" style={{ marginInlineStart: 8 }}>{project.language === "en" ? "English" : "العربية"}</span>}
+          {["en", "ar", "en>ar"].includes(project.language) && <span className="chip" style={{ marginInlineStart: 8 }}>{project.language === "en>ar" ? "English ← ترجمة عربية" : project.language === "en" ? "English" : "العربية"}</span>}
           <span className="muted small">{project.source ? `${project.source.filename} · ${fmtDuration(project.source.duration)}` : ""}</span>
         </div>
         <div className="row">{statusChip(project.status, t)}<button className="btn danger sm" onClick={remove}>{t("delete_project")}</button></div>
@@ -166,8 +166,8 @@ export default function ProjectPage() {
           <h2>{t("processing_title")}</h2>
           <Progress value={job?.progress ?? 0.05} />
           <div className="stages">
-            {STAGES.map((s, i) => (
-              <div key={s} className={`stage ${job && i < stageIdx ? "done" : i === stageIdx ? "active" : ""}`}><span className="dot" />{t("stage_" + s)}</div>
+            {STAGES.filter((s) => s !== "translate" || project.language === "en>ar").map((s) => (
+              <div key={s} className={`stage ${job && STAGES.indexOf(s) < stageIdx ? "done" : STAGES.indexOf(s) === stageIdx ? "active" : ""}`}><span className="dot" />{t("stage_" + s)}</div>
             ))}
           </div>
           {job?.stage === "model" && <p className="small" data-testid="model-stage">{t("stage_model")}</p>}
