@@ -29,8 +29,8 @@ try {
   await page.getByRole("button", { name: "إعادة الافتراضي" }).click();
   check("reset restores the default neon-future colours", (await prim()) === "#22d3ee");
   await page.goto(base + "/app/new");
-  check("the link tab is locked in the free version", await page.getByRole("button", { name: /من رابط/ }).isDisabled());
-  check("and the page says why, in Arabic", (await page.textContent("form")).includes("قريبًا"));
+  check("no link tab in the free version", (await page.getByRole("button", { name: /من رابط/ }).count()) === 0);
+  check("and the page says links are coming, in Arabic", (await page.textContent("form")).includes("قريبًا"));
   await page.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
   await page.locator('input[type=file][accept*=".srt"]').setInputFiles(path.join(here, "sample.srt"));
   await page.getByRole("button", { name: "ابدأ التحليل" }).click();
@@ -53,7 +53,6 @@ try {
   await phone.goto(base + "/app/new");
   check("phone sees an honest note (model size, keep screen on)", (await phone.locator('[data-testid="phone-note"]').textContent()).includes("خلّ الشاشة مفتوحة"));
   await phone.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
-  await phone.locator("input.input").first().fill("phone");
   await phone.getByRole("button", { name: "ابدأ التحليل" }).click();
   await phone.waitForSelector(".clip-card, .err[role=alert]", { timeout: 90000 });
   const secs = await phone.evaluate(() => window.__asrCalls.reduce((a, b) => a + b, 0));

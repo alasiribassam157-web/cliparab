@@ -38,7 +38,6 @@ await page.goto(base + "/"); await page.waitForTimeout(1500); await shot("01-lan
 await page.goto(base + "/app"); await page.waitForTimeout(800); await shot("02-dashboard-empty");
 await page.goto(base + "/app/new"); await page.waitForTimeout(800); await shot("03-new");
 await page.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
-await page.locator("input.input").first().fill("حلقة تجريبية للجوال");
 await page.getByRole("button", { name: "ابدأ التحليل" }).click();
 await page.waitForURL(/\/app\/p\//); await page.waitForTimeout(1200); await shot("04-processing");
 await page.waitForSelector(".clip-card, .err", { timeout: 90000 }); await page.waitForTimeout(1500); await shot("05-project");

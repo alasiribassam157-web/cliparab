@@ -52,7 +52,6 @@ export function Shell({ children, authed = false }: { children: ReactNode; authe
   return (
     <>
       {backend.mode === "demo" && <div className="banner"><div className="container">{t("demo_banner")}</div></div>}
-      {backend.mode === "local" && <div className="banner ok"><div className="container">{t("local_banner")}</div></div>}
       <header className={authed ? "topbar authed" : "topbar"}>
         <div className="container">
           <Logo />

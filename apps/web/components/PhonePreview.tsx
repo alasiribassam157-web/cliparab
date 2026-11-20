@@ -120,7 +120,6 @@ export function PhonePreview({ src, es, words, aspect }: Props) {
         <button className="btn icon-btn" onClick={() => setMuted((m) => !m)} aria-label="mute">{muted ? "🔇" : "🔊"}</button>
       </div>
       <span className="muted small" dir="ltr">{fmtTime(time - es.start)} / {fmtTime(es.end - es.start)}</span>
-      <span className="muted small" style={{ textAlign: "center", maxWidth: 300 }}>{t("reframe_note")}</span>
     </div>
   );
 }

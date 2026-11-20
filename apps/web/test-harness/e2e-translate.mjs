@@ -40,7 +40,6 @@ try {
   check("English speech shows the caption-language choice, Arabic translation selected", (await page.locator('[data-testid="cap-lang"] [aria-pressed="true"]').textContent()).includes("عربية"));
   check("form explains the translation", (await page.textContent("form")).includes("نترجمه للعربية"));
   await page.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
-  await page.locator("input.input").first().fill("english talk");
   await page.getByRole("button", { name: "ابدأ التحليل" }).click();
   await page.waitForSelector(".clip-card, .err[role=alert]", { timeout: 90000 });
   check("analysis finished with clips", (await page.locator(".clip-card").count()) >= 2, await page.locator(".err").allTextContents().then((x) => x.join(" ")));

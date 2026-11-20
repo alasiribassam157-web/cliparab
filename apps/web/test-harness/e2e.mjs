@@ -41,12 +41,13 @@ try {
   const sc = await page.locator(".showcase-item").evaluateAll((els) => els.map((e) => [e.querySelector("video")?.getAttribute("src")?.includes("upload.wikimedia.org"), e.textContent]));
   check("landing shows 3 real clips from the CC interview, with credit", sc.length === 3 && sc.every((x) => x[0]) && (await page.textContent("body")).includes("CC BY 3.0"), sc.map((x) => x[1].slice(0, 30)).join(" | "));
   await shot("01-landing");
+  check("landing ends with the disclaimer", (await page.locator("footer.disclaimer").textContent()).includes("إخلاء مسؤولية"));
 
   await page.goto(base + "/app/new");
   check("page is cross-origin isolated (multi-threaded speech model)", await page.evaluate(() => self.crossOriginIsolated === true));
-  check("free in-browser banner", (await page.locator(".banner.ok").textContent()).includes("داخل متصفحك"));
-  check("link tab is locked and marked soon", await page.getByRole("button", { name: /من رابط/ }).isDisabled() && (await page.textContent(".seg")).includes("قريبًا"));
-  check("page says the video must be downloaded then uploaded", (await page.textContent("form")).includes("لازم تحمّل الفيديو"));
+  check("no wordy banner; short disclaimer sits at the end of the landing", (await page.locator(".banner").count()) === 0);
+  check("no confusing link tab in the free version; it says links are coming", (await page.getByRole("button", { name: /من رابط/ }).count()) === 0 && (await page.textContent("form")).includes("قريبًا"));
+  check("two clear steps and one big start button", (await page.locator(".easy-step").count()) === 2 && (await page.locator(".big-go").count()) === 1);
   check("cannot start without a file", await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
   await page.getByRole("button", { name: "شوف مثالًا حقيقيًا جاهزًا" }).click();
   await page.waitForURL(/\/app\/p\//, { timeout: 30000 });
@@ -56,7 +57,6 @@ try {
   // run the speech-recognition path: same video uploaded as a plain file, no subtitles
   await page.goto(base + "/app/new");
   await page.locator('input[type=file][accept^="video"]').setInputFiles(path.join(here, "..", "public", "demo", "source.mp4"));
-  await page.locator("input.input").first().fill("حلقة نموذجية");
   await page.getByRole("button", { name: "ابدأ التحليل" }).click();
   await page.waitForURL(/\/app\/p\//, { timeout: 15000 });
   await page.waitForSelector('[data-testid="processing"]', { timeout: 5000 }).then(() => check("processing screen shows", true)).catch(() => check("processing screen shows", false));
@@ -129,7 +129,7 @@ try {
 
   await page.goto(base + "/app");
   await page.waitForTimeout(500);
-  check("project listed on the dashboard", (await page.textContent("body")).includes("حلقة نموذجية"));
+  check("project listed on the dashboard, named after the file", (await page.textContent("body")).includes("source"));
   const unexpected = problems.filter((p) => !/favicon|404|ERR_TUNNEL_CONNECTION_FAILED|ERR_NAME_NOT_RESOLVED/.test(p)); // the sandbox is offline: Wikimedia is unreachable here
   check("no unexpected console/page errors", unexpected.length === 0, unexpected.join(" | "));
 } catch (e) {

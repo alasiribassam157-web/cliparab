@@ -49,7 +49,6 @@ export default function Landing() {
         {sc && (
           <>
             <h2 style={{ marginTop: 36, marginBottom: 0, fontSize: "1.25rem" }}>{t("showcase_t")}</h2>
-            <p className="small muted" style={{ margin: "4px 0 0" }}>{t("showcase_tap")}</p>
             <div className="showcase" data-testid="showcase">
               {sc.suggestions.slice(0, 3).map((s) => (
                 <ShowcasePhone key={s.id} src={sc.source.preview_url} start={s.start} end={s.end} center={s.center ?? 0.5}
@@ -61,10 +60,8 @@ export default function Landing() {
                 <button type="button" className="btn" onClick={openSample} disabled={opening}>{opening ? t("sample_loading") : t("showcase_open")}</button>
               </div>
             )}
-            <p className="small muted showcase-credit"><a href={sc.source.page} target="_blank" rel="noreferrer">{t("showcase_credit")}</a></p>
           </>
         )}
-        <p className="small muted" style={{ marginTop: 0 }}>{t("local_landing")}</p>
       </section>
 
       <section className="grid4" style={{ marginBottom: 56 }}>
@@ -72,7 +69,6 @@ export default function Landing() {
           <div className="card" key={i} data-reveal style={{ "--d": `${i * 90}ms` } as React.CSSProperties}>
             <div className="feat-ic" aria-hidden>{["✦", "✎", "◐", "⚡"][i - 1]}</div>
             <h3>{t(`f${i}_t`)}</h3>
-            <p className="muted" style={{ margin: 0 }}>{t(`f${i}_d`)}</p>
           </div>
         ))}
       </section>
@@ -83,7 +79,10 @@ export default function Landing() {
           {[1, 2, 3, 4].map((i) => <div className="card step" key={i} data-reveal style={{ "--d": `${i * 90}ms` } as React.CSSProperties}><b>{t(`s${i}`)}</b></div>)}
         </div>
       </section>
-      <p className="footer">{t("legal_note")}</p>
+      <footer className="footer disclaimer">
+        <p>{t("legal_note")}</p>
+        {sc && <p><a href={sc.source.page} target="_blank" rel="noreferrer">{t("showcase_credit")}</a></p>}
+      </footer>
     </Shell>
   );
 }

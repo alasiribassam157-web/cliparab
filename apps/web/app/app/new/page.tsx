@@ -44,7 +44,7 @@ export default function NewProject() {
     e.preventDefault();
     setOver(false);
     const f = e.dataTransfer.files?.[0];
-    if (f) { setFile(f); if (!name) setName(f.name.replace(/\.[^.]+$/, "")); }
+    if (f) { setFile(f); setName(f.name.replace(/\.[^.]+$/, "")); }
   };
 
   const local = backend.mode === "local";
@@ -89,59 +89,70 @@ export default function NewProject() {
     }
   };
 
+  const pickFile = (f: File | undefined) => { if (f) { setFile(f); setName(f.name.replace(/\.[^.]+$/, "")); setErr(""); } };
+
   return (
-    <form className="stack narrow" style={{ width: "min(640px, 100%)" }} onSubmit={submit}>
-      <h1>{t("new_title")}</h1>
-      <label className="field">{t("project_name")}<input className="input" value={name} onChange={(e) => setName(e.target.value)} required={source === "file"} /></label>
-      <div className="seg" role="group" aria-label={t("pick_video")}>
-        <button type="button" aria-pressed={source === "file"} onClick={() => setSource("file")} disabled={busy}>{t("src_file")}</button>
-        <button type="button" aria-pressed={source === "url"} onClick={() => !local && setSource("url")} disabled={busy || local} aria-disabled={local} title={local ? t("soon") : undefined}>{t("src_url")}{local && <span className="soon-badge">{t("soon")}</span>}</button>
-      </div>
+    <form className="stack narrow simple-new" style={{ width: "min(560px, 100%)" }} onSubmit={submit}>
+      <h1 style={{ marginBottom: 0 }}>{t("easy_title")}</h1>
+      <p className="muted" style={{ margin: 0 }}>{t("easy_sub")}</p>
+
+      {/* 1. the video */}
+      <div className="easy-step"><span className="easy-num">1</span><b>{t("easy_s1")}</b></div>
       {source === "file" ? (
-        <div className={`drop${over ? " over" : ""}`} role="button" tabIndex={0}
-          onClick={() => fileRef.current?.click()} onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
+        <div className={`drop big-drop${over ? " over" : ""}${file ? " has-file" : ""}`} role="button" tabIndex={0}
+          onClick={() => !busy && fileRef.current?.click()} onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
           onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
-          <b>{file ? file.name : t("pick_video")}</b>
-          <input ref={fileRef} type="file" accept="video/*,audio/*,.mkv" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) { setFile(f); if (!name) setName(f.name.replace(/\.[^.]+$/, "")); } }} />
+          {file ? (<><b className="file-name">🎬 {file.name}</b><span className="small muted">{t("easy_change")}</span></>)
+            : (<><b>{t("easy_pick")}</b><span className="small muted">{t("easy_pick_sub")}</span></>)}
+          <input ref={fileRef} type="file" accept="video/*,audio/*,.mkv" hidden onChange={(e) => pickFile(e.target.files?.[0])} />
         </div>
       ) : (
-        <div className="stack" style={{ gap: 6 }}>
-          <label className="field">{t("video_url")}
-            <input className="input" type="url" inputMode="url" dir="ltr" autoComplete="off" spellCheck={false}
-              placeholder={t("video_url_ph")} value={url} onChange={(e) => setUrl(e.target.value)} />
-          </label>
-          <p className="small muted" style={{ margin: 0 }}>{t(local ? "url_local_note" : "url_hint")}</p>
-        </div>
+        <label className="field">{t("video_url")}
+          <input className="input" type="url" inputMode="url" dir="ltr" autoComplete="off" spellCheck={false} placeholder={t("video_url_ph")} value={url} onChange={(e) => setUrl(e.target.value)} />
+        </label>
       )}
-      <div className="field">
-        <b>{t("lang_label")}</b>
-        <div className="seg" role="group" aria-label={t("lang_label")} data-testid="lang">
-          <button type="button" aria-pressed={lang === "ar"} onClick={() => setLang("ar")} disabled={busy}>العربية</button>
-          <button type="button" aria-pressed={lang === "en"} onClick={() => setLang("en")} disabled={busy}>English</button>
-        </div>
-        {lang === "en" && (<>
-          <b style={{ marginTop: 8 }}>{t("cap_lang")}</b>
-          <div className="seg" role="group" aria-label={t("cap_lang")} data-testid="cap-lang">
-            <button type="button" aria-pressed={toAr} onClick={() => setToAr(true)} disabled={busy}>{t("cap_ar_tr")}</button>
-            <button type="button" aria-pressed={!toAr} onClick={() => setToAr(false)} disabled={busy}>English</button>
-          </div>
-        </>)}
-        <span className="small muted" style={{ fontWeight: 400 }}>{lang === "en" && toAr ? t("tr_note") : t("lang_note")}</span>
+      {local && <p className="small muted" style={{ margin: 0 }} data-testid="upload-first">{t("upload_first")}</p>}
+
+      {/* 2. language */}
+      <div className="easy-step"><span className="easy-num">2</span><b>{t("easy_s2")}</b></div>
+      <div className="seg big-seg" role="group" aria-label={t("lang_label")} data-testid="lang">
+        <button type="button" aria-pressed={lang === "ar"} onClick={() => setLang("ar")} disabled={busy}>العربية</button>
+        <button type="button" aria-pressed={lang === "en"} onClick={() => setLang("en")} disabled={busy}>English</button>
       </div>
-      {local && source === "file" && <p className="small muted" style={{ margin: 0 }} data-testid="upload-first">{t("upload_first")}</p>}
-      {local && phone && <div className="note" role="note" data-testid="phone-note">{t("phone_note")}</div>}
-      {local && source === "file" && (
-        <div className="row" style={{ gap: 8 }}>
-          <button type="button" className="btn sm" onClick={pickSample} disabled={busy || sampling}>{sampling ? t("sample_loading") : t("try_sample")}</button>
-          <span className="small muted">{t("long_video_note")}</span>
+      {lang === "en" && (
+        <div className="seg" role="group" aria-label={t("cap_lang")} data-testid="cap-lang">
+          <button type="button" aria-pressed={toAr} onClick={() => setToAr(true)} disabled={busy}>{t("cap_ar_tr")}</button>
+          <button type="button" aria-pressed={!toAr} onClick={() => setToAr(false)} disabled={busy}>{t("easy_cap_en")}</button>
         </div>
       )}
-      {backend.mode === "demo" && <p className="small muted" style={{ margin: 0 }}>{t(source === "url" ? "demo_url_note" : "demo_upload_note")}</p>}
-      <label className="field">{t("pick_srt")}<input className="input" type="file" accept=".srt,.vtt,text/vtt" onChange={(e) => setSrt(e.target.files?.[0] ?? null)} /></label>
-      {srt && <span className="small muted" data-testid="srt-name">✓ {srt.name}</span>}
+      <span className="small muted">{lang === "en" && toAr ? t("tr_note") : t("lang_note")}</span>
+
+      {/* 3. go */}
       {busy && <div><div className="small muted">{t(source === "url" ? "downloading" : "uploading")}</div><Progress value={frac} /></div>}
       {err && <div className="err" role="alert">{err}</div>}
-      <button className="btn primary" disabled={busy || missing}>{t("start_analysis")}</button>
+      <button className="btn primary big-go" disabled={busy || missing}>{t("start_analysis")} ✨</button>
+      {local && phone && <div className="note small" role="note" data-testid="phone-note">{t("phone_note")}</div>}
+
+      {local && (
+        <button type="button" className="link-btn" onClick={pickSample} disabled={busy || sampling}>{sampling ? t("sample_loading") : t("try_sample")}</button>
+      )}
+      {backend.mode === "demo" && <p className="small muted" style={{ margin: 0 }}>{t(source === "url" ? "demo_url_note" : "demo_upload_note")}</p>}
+
+      <details className="more">
+        <summary>{t("easy_more")}</summary>
+        <div className="stack" style={{ marginTop: 10 }}>
+          <label className="field">{t("project_name")}<input className="input" value={name} onChange={(e) => setName(e.target.value)} /></label>
+          {!local && (
+            <div className="seg" role="group" aria-label={t("pick_video")}>
+              <button type="button" aria-pressed={source === "file"} onClick={() => setSource("file")} disabled={busy}>{t("src_file")}</button>
+              <button type="button" aria-pressed={source === "url"} onClick={() => setSource("url")} disabled={busy}>{t("src_url")}</button>
+            </div>
+          )}
+          <label className="field">{t("pick_srt")}<input className="input" type="file" accept=".srt,.vtt,text/vtt" onChange={(e) => setSrt(e.target.files?.[0] ?? null)} /></label>
+          {srt && <span className="small muted" data-testid="srt-name">✓ {srt.name}</span>}
+          {local && <span className="small muted">{t("long_video_note")}</span>}
+        </div>
+      </details>
     </form>
   );
 }

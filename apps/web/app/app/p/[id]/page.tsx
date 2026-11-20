@@ -66,17 +66,11 @@ function ClipCard({ s, pid, onEdit, busy, top }: { s: Suggestion; pid: string; o
           <h3 className="clip-title">#{s.rank} · {s.title}</h3>
           <span className="chip">{t("type_" + s.clip_type)}</span>
         </div>
-        <div className="row small muted" style={{ marginBlock: 4 }}>
-          <span dir="ltr">{fmtTime(s.start)} – {fmtTime(s.end)}</span>
-          <span>{t("dur")}: {fmtDuration(s.duration)}</span>
-          <span className="chip">{t("engine_" + s.engine)}</span>
-        </div>
-        <p style={{ margin: "6px 0" }}>{s.reason_ar}</p>
+        <div className="row small muted" style={{ marginBlock: 4 }}><span>{fmtDuration(s.duration)}</span></div>
         <div className="row">
           <button className="btn primary sm" onClick={download} disabled={busy || (!!dl && !dl.err && !dl.url)} data-testid="dl-btn">⬇ {t("dl_clip")}</button>
           <button className="btn sm" onClick={() => onEdit(s)} disabled={busy}>{t("edit")}</button>
-          <button className="btn sm" onClick={() => setPreview((v) => !v)}>{t("preview_source")}</button>
-          <button className="btn sm" onClick={() => setWhy((v) => !v)} aria-expanded={why}>{t("why_clip")}</button>
+          <button className="btn sm ghost-btn" onClick={() => setWhy((v) => !v)} aria-expanded={why} aria-label={t("why_clip")}>⋯</button>
         </div>
         {dl && (
           <div className="dl-box" data-testid="dl-box">
@@ -85,7 +79,13 @@ function ClipCard({ s, pid, onEdit, busy, top }: { s: Suggestion; pid: string; o
               : <><span className="small muted">{t("dl_working")} {Math.round(dl.p * 100)}%</span><Progress value={dl.p} /></>}
           </div>
         )}
-        {why && <Breakdown s={s} />}
+        {why && (
+          <div className="stack" style={{ gap: 8, marginTop: 8 }}>
+            <p className="small muted" style={{ margin: 0 }}><span dir="ltr">{fmtTime(s.start)} – {fmtTime(s.end)}</span> · {s.reason_ar}</p>
+            <button className="btn sm" style={{ alignSelf: "flex-start" }} onClick={() => setPreview((v) => !v)}>{t("preview_source")}</button>
+            <Breakdown s={s} />
+          </div>
+        )}
         {preview && <video ref={vref} className="clip-video" src={backend.mediaUrl(pid)} controls playsInline />}
       </div>
     </article>

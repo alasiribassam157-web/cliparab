@@ -433,3 +433,22 @@ body > main, .topbar, .banner, .footer { position: relative; z-index: 1; }
 .logo-word { background: var(--grad) !important; background-size: 200% 100% !important; -webkit-background-clip: text !important; background-clip: text !important; color: transparent !important; animation: gradmove 5s linear infinite; }
 @media (max-width: 640px) { .bd-wm.w1 { top: 10vh; } .bd-floor { height: 26vh; } }
 @media (prefers-reduced-motion: reduce) { .hero-title .rv { opacity: 1; transform: none; filter: none; } .hero-title .rot span:first-child { opacity: 1; } .bd-net { display: none; } }
+
+/* easy new-project flow */
+.simple-new { gap: 14px; }
+.easy-step { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 1.05rem; }
+.easy-num { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--grad); color: var(--primary-ink); font-weight: 800; flex: none; }
+.big-drop { min-height: 170px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-size: 1.1rem; cursor: pointer; }
+.big-drop.has-file { border-style: solid; border-color: var(--primary); }
+.big-drop.has-file::before { content: "✓"; }
+.big-drop .file-name { word-break: break-all; }
+.big-seg button { min-height: 52px; font-size: 1.05rem; font-weight: 700; }
+.big-go { width: 100%; min-height: 58px; font-size: 1.15rem; }
+.link-btn { background: none; border: 0; color: var(--primary); font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 4px; padding: 6px; align-self: center; }
+.more { border: 1px solid var(--border); border-radius: 16px; padding: 10px 14px; background: color-mix(in srgb, var(--surface) 60%, transparent); }
+.more summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+
+.disclaimer { margin-top: 56px; padding-top: 18px; border-top: 1px solid var(--border); font-size: .78rem; color: var(--muted); text-align: center; line-height: 1.7; }
+.disclaimer p { margin: 0 0 6px; } .disclaimer a { color: var(--muted); }
+.ghost-btn { min-width: 40px; font-weight: 800; letter-spacing: 2px; }
+.grid4 .card h3 { margin: 0; }
