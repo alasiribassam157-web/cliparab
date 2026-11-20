@@ -137,7 +137,7 @@ export default function ProjectPage() {
 
   if (!project) return <p className="muted">{err || t("loading")}</p>;
 
-  const stageIdx = job ? Math.max(0, STAGES.indexOf(job.stage as (typeof STAGES)[number])) : 0;
+  const stageIdx = job ? Math.max(0, STAGES.indexOf((job.stage === "model" ? "transcribe" : job.stage) as (typeof STAGES)[number])) : 0;
   return (
     <div className="stack">
       <div className="row spread">
@@ -158,10 +158,12 @@ export default function ProjectPage() {
               <div key={s} className={`stage ${job && i < stageIdx ? "done" : i === stageIdx ? "active" : ""}`}><span className="dot" />{t("stage_" + s)}</div>
             ))}
           </div>
-          <p className="muted small">{t("processing_hint")}</p>
+          {job?.stage === "model" && <p className="small" data-testid="model-stage">{t("stage_model")}</p>}
+          <p className="muted small">{t(backend.mode === "local" ? "processing_hint_local" : "processing_hint")}</p>
         </div>
       )}
 
+      {project.status === "ready" && project.last_error && <div className="err" role="alert">{locale === "ar" ? project.last_error.ar : project.last_error.en}</div>}
       {project.status === "ready" && <div className="card"><button className="btn primary" onClick={startAnalysis} disabled={busy}>{t("start_analysis")}</button></div>}
 
       {project.status === "done" && (

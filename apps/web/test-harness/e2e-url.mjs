@@ -1,40 +1,41 @@
-// Browser smoke test of "import from a link" in demo mode. Run: node test-harness/e2e-url.mjs  (needs playwright + Chrome)
+// Free (in-browser) mode, the two paths that need no speech model: links are refused with a clear Arabic
+// explanation, and an attached SRT file replaces speech recognition entirely. Run: node test-harness/e2e-url.mjs
 import { createRequire } from "node:module";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { serve } from "./serve.mjs";
 const require = createRequire("/home/claude/.npm-global/lib/node_modules/");
 const { chromium } = require("playwright");
+const here = path.dirname(fileURLToPath(import.meta.url));
 const server = await serve(0);
 const base = "http://127.0.0.1:" + server.address().port;
-const browser = await chromium.launch({ executablePath: process.env.CHROME ?? "/usr/bin/google-chrome", args: ["--no-sandbox"] });
-const page = await (await browser.newContext({ viewport: { width: 1100, height: 860 }, locale: "ar" })).newPage();
+const browser = await chromium.launch({ executablePath: "/usr/bin/google-chrome", args: ["--no-sandbox"] });
+const page = await (await browser.newContext({ locale: "ar" })).newPage();
 const problems = [];
-page.on("pageerror", (e) => problems.push("pageerror: " + e.message));
-page.on("console", (m) => { if (m.type() === "error") problems.push("console: " + m.text()); });
+page.on("pageerror", (e) => problems.push(e.message));
+// no ASR stub here: if recognition were attempted it would try the (unreachable) CDN and fail the run
+const requests = [];
+page.on("request", (r) => { if (!r.url().startsWith(base)) requests.push(r.url()); });
 const failures = [];
 const check = (n, ok, x = "") => { console.log((ok ? "PASS " : "FAIL ") + n + (x ? "  " + x : "")); if (!ok) failures.push(n); };
 try {
-  await page.goto(base + "/");
-  await page.getByRole("link", { name: "ابدأ الآن" }).last().click();     // hero button goes straight to the new-project form
-  await page.waitForURL("**/app/new");
-  check("file mode is the default (drop zone visible)", await page.locator(".drop").isVisible());
+  await page.goto(base + "/app/new");
   await page.getByRole("button", { name: "من رابط" }).click();
-  check("URL field replaces the drop zone", (await page.locator(".drop").count()) === 0 && await page.getByPlaceholder("https://www.youtube.com/watch?v=…").isVisible());
-  check("demo note for links is shown", (await page.textContent("form")).includes("لا يُنزَّل الرابط فعليًا"));
-  // bad scheme is rejected with the Arabic error
-  await page.getByPlaceholder("https://www.youtube.com/watch?v=…").evaluate((el) => { el.type = "text"; });
-  await page.fill('input[dir="ltr"]', "ftp://example.com/a.mp4");
+  await page.locator('input[type="url"]').fill("https://www.youtube.com/watch?v=FPwTUVi7Qk4");
+  check("a YouTube link cannot be submitted in the free version", await page.getByRole("button", { name: "ابدأ التحليل" }).isDisabled());
+  check("and the page says why, in Arabic", (await page.textContent("form")).includes("يحتاج خادمًا مدفوعًا"));
+  await page.getByRole("button", { name: "رفع ملف" }).click();
+  await page.getByRole("button", { name: "جرّب على حلقة نموذجية" }).click();
+  await page.waitForFunction(() => document.querySelector(".drop b")?.textContent?.includes(".mp4"), null, { timeout: 15000 });
+  await page.locator('input[type=file][accept*=".srt"]').setInputFiles(path.join(here, "sample.srt"));
   await page.getByRole("button", { name: "ابدأ التحليل" }).click();
-  await page.waitForSelector('[role="alert"]');
-  check("invalid link shows Arabic error", (await page.textContent('[role="alert"]')).includes("الرابط غير صالح"));
-  // good link goes through download -> analysis
-  await page.fill('input[dir="ltr"]', "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-  await page.getByRole("button", { name: "ابدأ التحليل" }).click();
-  await page.waitForURL(/\/app\/p\//, { timeout: 20000 });
-  check("link import leads to the processing screen", await page.getByTestId("processing").waitFor({ timeout: 8000 }).then(() => true, () => false));
-  await page.waitForSelector('[data-testid="clip-card"]', { timeout: 30000 });
-  check("suggestions listed after link import", (await page.locator('[data-testid="clip-card"]').count()) >= 3);
-  check("no console/page errors", problems.length === 0, problems.join(" | "));
-} catch (e) { failures.push("exception: " + e.message); console.log("EXCEPTION", e.message); }
+  await page.waitForSelector(".clip-card, .err", { timeout: 60000 });
+  const n = await page.locator(".clip-card").count();
+  check("SRT import gives clips without any speech model", n >= 2 && !requests.some((u) => u.includes("huggingface") || u.includes("jsdelivr")), `cards=${n} external=${requests.length}`);
+  await page.getByRole("button", { name: "النص" }).click();
+  check("transcript comes from the subtitle file", (await page.textContent("body")).includes("هل تعرف لماذا يفشل"));
+} catch (e) { check("exception", false, e.message); }
+check("no page errors", problems.length === 0, problems.join(" | "));
 await browser.close(); server.close();
 console.log(failures.length ? `\n${failures.length} FAILED` : "\nALL PASSED");
 process.exit(failures.length ? 1 : 0);

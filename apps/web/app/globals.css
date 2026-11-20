@@ -160,3 +160,4 @@ input[type="range"] { width: 100%; accent-color: var(--primary); }
   .nav { margin-inline-start: 0; }
   main.container { padding-block: 18px; }
 }
+.banner.ok { background: color-mix(in srgb, #22c55e 16%, var(--surface)); border-bottom-color: color-mix(in srgb, #22c55e 40%, var(--border)); }

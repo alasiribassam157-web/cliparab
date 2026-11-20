@@ -213,13 +213,14 @@ export default function Editor() {
               </select></label>
             <div className="row"><span className="chip ok">{t("no_watermark")}</span></div>
             {backend.mode === "demo" && <span className="muted small">{t("demo_export_note")}</span>}
+            {backend.mode === "local" && <span className="muted small">{t("local_export_note")}</span>}
             <button className="btn primary" onClick={startExport} disabled={!!exp && exp.status !== "done"}>{exp && exp.status !== "done" ? t("exporting") : t("export_btn")}</button>
             {exp && exp.status !== "done" && <Progress value={expProgress} />}
             {exp?.status === "done" && exp.download_url && (
               <div className="stack">
                 <video src={backend.exportUrl(exp)} controls playsInline style={{ width: 220, borderRadius: 16, background: "#000" }} />
                 <div className="row">
-                  <a className="btn primary" href={backend.exportUrl(exp, true)} download>{t("download")} · {fmtBytes(exp.size_bytes)}</a>
+                  <a className="btn primary" href={backend.exportUrl(exp, true)} download={`${(clip.title || "clip").replace(/[\\/:*?"<>|…]/g, "").slice(0, 60)}.${(exp as ExportItem & { mime?: string }).mime === "video/webm" ? "webm" : "mp4"}`}>{t("download")} · {fmtBytes(exp.size_bytes)}</a>
                   <button className="btn" onClick={makeReview}>{t("review_link")}</button>
                 </div>
               </div>

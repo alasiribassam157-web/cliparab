@@ -25,6 +25,8 @@ export interface Project {
   retention_days: number;
   source: SourceInfo | null;
   active_job_id?: string | null;
+  /** Why the last in-browser analysis stopped (local mode). */
+  last_error?: { ar: string; en: string } | null;
 }
 
 export interface JobError {
@@ -146,7 +148,7 @@ export class ApiException extends Error {
 }
 
 export interface Backend {
-  mode: "demo" | "live";
+  mode: "demo" | "live" | "local";
   token(): string | null;
   me(): Promise<User>;
   updateMe(patch: Partial<Pick<User, "locale" | "allow_training">>): Promise<User>;

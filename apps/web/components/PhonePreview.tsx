@@ -79,7 +79,7 @@ export function PhonePreview({ src, es, words, aspect }: Props) {
       <div className="phone" style={{ containerType: "inline-size" }} data-testid="phone">
         {es.layout === "fill" && (
           <div className="fill">
-            <video ref={main} src={src} {...common} style={{ objectPosition: objPos(es.reframe_mode === "manual" ? es.manual_center : 0.5) }} />
+            <video ref={main} src={src} {...common} style={{ objectPosition: objPos(es.reframe_mode === "manual" ? es.manual_center : es.reframe_mode === "auto" && typeof es.auto_center === "number" ? (es.auto_center as number) : 0.5) }} />
           </div>
         )}
         {es.layout === "fit" && (

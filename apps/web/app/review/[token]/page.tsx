@@ -27,7 +27,7 @@ export default function Review() {
     await load();
   };
 
-  const videoSrc = page?.video_url ? (page.video_url.startsWith("http") || backend.mode === "demo" ? page.video_url : backend.reviewVideoUrl(token)) : null;
+  const videoSrc = page?.video_url ? (page.video_url.startsWith("http") || backend.mode !== "live" ? page.video_url : backend.reviewVideoUrl(token)) : null;
   return (
     <Shell>
       <div className="stack" style={{ maxWidth: 560, marginInline: "auto" }}>

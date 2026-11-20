@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createLiveBackend } from "./api";
-import { createDemoBackend } from "./demo";
+import { createLocalBackend } from "./local/backend";
 import { ApiException, type Backend, type User } from "./types";
 
 const BackendContext = createContext<Backend | null>(null);
@@ -10,7 +10,7 @@ const BackendContext = createContext<Backend | null>(null);
 export function BackendProvider({ children }: { children: ReactNode }) {
   const backend = useMemo<Backend>(() => {
     const url = process.env.NEXT_PUBLIC_API_URL;
-    return url ? createLiveBackend(url) : createDemoBackend();
+    return url ? createLiveBackend(url) : createLocalBackend();
   }, []);
   return <BackendContext.Provider value={backend}>{children}</BackendContext.Provider>;
 }

@@ -5,6 +5,7 @@ import { useRef, useState, type DragEvent, type FormEvent } from "react";
 import { Progress } from "@/components/ui";
 import { errorText, useBackend } from "@/lib/backend";
 import { useI18n } from "@/lib/i18n";
+import { sampleFile } from "@/lib/local/backend";
 import { ApiException, type Backend, type Job } from "@/lib/types";
 
 /** Resolves when the job finishes; rejects with the job's own (localised) error if it fails. */
@@ -43,7 +44,15 @@ export default function NewProject() {
     if (f) { setFile(f); if (!name) setName(f.name.replace(/\.[^.]+$/, "")); }
   };
 
-  const missing = backend.mode === "live" && (source === "file" ? !file : !url.trim());
+  const local = backend.mode === "local";
+  const missing = (backend.mode === "live" && (source === "file" ? !file : !url.trim())) || (local && (source === "url" || !file));
+  const [sampling, setSampling] = useState(false);
+  const pickSample = async () => {
+    setSampling(true); setErr("");
+    try { const f = await sampleFile(); setFile(f); setSource("file"); if (!name) setName(locale === "ar" ? "حلقة نموذجية" : "Sample episode"); }
+    catch (e) { setErr(errorText(e, locale)); }
+    setSampling(false);
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -96,7 +105,13 @@ export default function NewProject() {
             <input className="input" type="url" inputMode="url" dir="ltr" autoComplete="off" spellCheck={false}
               placeholder={t("video_url_ph")} value={url} onChange={(e) => setUrl(e.target.value)} />
           </label>
-          <p className="small muted" style={{ margin: 0 }}>{t("url_hint")}</p>
+          <p className="small muted" style={{ margin: 0 }}>{t(local ? "url_local_note" : "url_hint")}</p>
+        </div>
+      )}
+      {local && source === "file" && (
+        <div className="row" style={{ gap: 8 }}>
+          <button type="button" className="btn sm" onClick={pickSample} disabled={busy || sampling}>{sampling ? t("sample_loading") : t("try_sample")}</button>
+          <span className="small muted">{t("long_video_note")}</span>
         </div>
       )}
       {backend.mode === "demo" && <p className="small muted" style={{ margin: 0 }}>{t(source === "url" ? "demo_url_note" : "demo_upload_note")}</p>}

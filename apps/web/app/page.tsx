@@ -20,7 +20,7 @@ export default function Landing() {
             <video key={id} src={`/demo/${id}.mp4`} muted loop playsInline autoPlay preload="metadata" />
           ))}
         </div>
-        <p className="small muted" style={{ marginTop: 0 }}>{t("demo_banner")}</p>
+        <p className="small muted" style={{ marginTop: 0 }}>{t("local_landing")}</p>
       </section>
 
       <section className="grid4" style={{ marginBottom: 40 }}>
