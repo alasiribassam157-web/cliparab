@@ -1,4 +1,5 @@
 import { applyBrand } from "@/lib/brand";
+import { Backdrop } from "@/components/Backdrop";
 import { createRoot } from "react-dom/client";
 import type { ComponentType, ReactNode } from "react";
 import "../app/globals.css";
@@ -41,7 +42,7 @@ function Router() {
 }
 
 createRoot(document.getElementById("root")!).render(
-  <I18nProvider><BackendProvider><Router /></BackendProvider></I18nProvider>,
+  <I18nProvider><BackendProvider><Backdrop /><Router /></BackendProvider></I18nProvider>,
 );
 
 applyBrand(); // the real app does this in <head> (brandInit) and in <Motion/>

@@ -36,6 +36,12 @@ check("clips end on a finished sentence", sug.every((s) => /[.!?]$/.test(s.text.
 check("no two clips overlap much", sug.every((a, i) => sug.every((b, j) => i === j || Math.min(a.end, b.end) - Math.max(a.start, b.start) < 0.3 * Math.min(a.duration, b.duration))));
 console.log(sug.map((s) => `${s.total} ${s.clip_type} ${s.duration}s "${s.title}"`).join("\n"));
 
+// a 24 s reel with ~11 s of speech (like a phone video) must still give a clip
+const reel = []; let rt = 1;
+for (const sent of ["We are supposed to pull people over if they are black.", "Please get on the ground so I can beat you.", "No no please."]) { const ws = sent.split(" "); ws.forEach((w, k) => reel.push({ text: w, start: rt + k * 0.35, end: rt + k * 0.35 + 0.3, conf: 0.9, eos: k === ws.length - 1 })); rt += ws.length * 0.35 + 1.5; }
+const rs = suggestClips({ spans: [reel], duration: 24, maxClips: 4, lang: "en" });
+check("a short reel (24 s) still gets a clip", rs.length >= 1, `n=${rs.length} ${rs.map((x) => x.duration).join(",")}`);
+
 // Arabic regression with the repository's sample subtitles
 const srt = fs.readFileSync("sample.srt", "utf-8");
 const segs = parseSubtitles(srt);

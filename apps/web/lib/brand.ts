@@ -1,9 +1,10 @@
 /** User brand colours: two colours (a → b) used for the site accent, the opening-title banner and caption highlight of new clips. */
 export interface Brand { a: string; b: string }
-export const DEFAULT_BRAND: Brand = { a: "#ff4d2e", b: "#ffb84d" };
+export const DEFAULT_BRAND: Brand = { a: "#22d3ee", b: "#e879f9" };
 export const BRAND_PRESETS: { ar: string; en: string; v: Brand }[] = [
-  { ar: "جمر (الافتراضي)", en: "Ember (default)", v: { a: "#ff4d2e", b: "#ffb84d" } },
-  { ar: "نيون", en: "Neon", v: { a: "#22d3ee", b: "#a3e635" } },
+  { ar: "مستقبل النيون (الافتراضي)", en: "Neon future (default)", v: { a: "#22d3ee", b: "#e879f9" } },
+  { ar: "جمر", en: "Ember", v: { a: "#ff4d2e", b: "#ffb84d" } },
+  { ar: "نيون ليموني", en: "Neon lime", v: { a: "#22d3ee", b: "#a3e635" } },
   { ar: "أورورا", en: "Aurora", v: { a: "#8b5cf6", b: "#ff4d8d" } },
   { ar: "غروب", en: "Sunset", v: { a: "#ff7a3d", b: "#ffd21f" } },
   { ar: "محيط", en: "Ocean", v: { a: "#3b82f6", b: "#22d3ee" } },
@@ -12,7 +13,7 @@ export const BRAND_PRESETS: { ar: string; en: string; v: Brand }[] = [
   { ar: "ذهبي", en: "Gold", v: { a: "#e8b84a", b: "#b8742e" } },
   { ar: "أبيض وأسود", en: "Mono", v: { a: "#f4f4f5", b: "#a1a1aa" } },
 ];
-const KEY = "vyra.brand";
+const KEY = "vyra.brand.v2";
 const HEX = /^#[0-9a-f]{6}$/i;
 
 export function readBrand(): Brand {

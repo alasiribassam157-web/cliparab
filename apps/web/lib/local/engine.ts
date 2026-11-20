@@ -420,12 +420,14 @@ export function suggestClips(inp: AnalyzeInput): Suggestion[] {
   let chapterBase = 0;
   const allWords = inp.spans.flat();
   const rates = paceRates(allWords);
+  // short videos (a 20-40 s reel) rarely hold 15 s of continuous speech: allow shorter clips there
+  const minD = inp.duration && inp.duration < 75 ? Math.max(5, Math.min(15, inp.duration * 0.35)) : 15;
   for (const span of inp.spans) {
     if (span.length < 4) continue;
     const ss = splitSentences(span);
     const chapters = segmentTopics(ss).map((x) => x + chapterBase);
     chapterBase = (chapters[chapters.length - 1] ?? chapterBase) + 1;
-    for (const c of generateCandidates(ss, inp.duration)) {
+    for (const c of generateCandidates(ss, inp.duration, minD)) {
       c.chapter = chapters[c.first] ?? 0;
       if (inp.peaks?.some((t) => t >= c.start && t <= c.end)) c.flags.push("energy_peak");
       all.push({ c, ss });

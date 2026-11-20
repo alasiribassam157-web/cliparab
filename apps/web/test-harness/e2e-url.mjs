@@ -27,7 +27,7 @@ try {
   check("brand colour persists after reload", (await prim()) === "#ff7a3d");
   check("brand preview strip uses the colours", (await page.locator(".brand-preview").getAttribute("style")).includes("255, 122, 61"));
   await page.getByRole("button", { name: "إعادة الافتراضي" }).click();
-  check("reset restores the default ember", (await prim()) === "#ff4d2e");
+  check("reset restores the default neon-future colours", (await prim()) === "#22d3ee");
   await page.goto(base + "/app/new");
   check("the link tab is locked in the free version", await page.getByRole("button", { name: /من رابط/ }).isDisabled());
   check("and the page says why, in Arabic", (await page.textContent("form")).includes("قريبًا"));

@@ -9,6 +9,17 @@ import { useBackend } from "@/lib/backend";
 import { useI18n } from "@/lib/i18n";
 import { createSampleProject, loadShowcase, type Showcase } from "@/lib/local/backend";
 
+function TypeLine({ text }: { text: string }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setN(text.length); return; }
+    let i = 0;
+    const id = setInterval(() => { i += 2; setN(Math.min(text.length, i)); if (i >= text.length) clearInterval(id); }, 28);
+    return () => clearInterval(id);
+  }, [text]);
+  return <p className="typeline" aria-label={text}><span aria-hidden>{text.slice(0, n)}</span><i className="caret" aria-hidden /></p>;
+}
+
 export default function Landing() {
   const { t } = useI18n();
   const backend = useBackend();
@@ -26,8 +37,11 @@ export default function Landing() {
     <Shell>
       <section className="hero">
         <span className="eyebrow">{t("eyebrow")}</span>
-        <h1>{t("hero_title")}</h1>
-        <p>{t("hero_sub")}</p>
+        <h1 className="hero-title">
+          {t("hero_lead").split(" ").map((w, i) => <span key={i}><span className="rv" style={{ "--i": i } as React.CSSProperties}>{w}</span>{" "}</span>)}
+          <span className="rot" aria-label={t("hero_rot").split("|")[0]}>{t("hero_rot").split("|").map((w) => <span key={w}>{w}</span>)}</span>
+        </h1>
+        <TypeLine text={t("hero_sub")} />
         <div className="row" style={{ justifyContent: "center" }}>
           <Link className="btn primary" href="/app/new">{t("start_now")}</Link>
         </div>
