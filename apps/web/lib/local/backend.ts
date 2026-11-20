@@ -9,6 +9,7 @@ import { parseSubtitles, suggestClips, type Word } from "./engine";
 import { idbClear, idbDel, idbDelPrefix, idbGet, idbPut } from "./idb";
 import { renderClip } from "./render";
 import { holdScreen } from "./wakelock";
+import { isRtl, rtlShare, WHISPER_LANG } from "./dir";
 import { bestFrame, closeVideo, openVideo, thumbnail, within } from "./vision";
 
 const KEY = "cliparab.local.v1";
@@ -136,15 +137,18 @@ export function createLocalBackend(): Backend {
       const picks = pickSpans(env, audio.duration || duration, isPhoneOrTablet() ? PHONE_BUDGET : TRANSCRIBE_BUDGET);
       const total = picks.reduce((a, [s, e]) => a + (e - s), 0) || 1;
       let done = 0;
+      // language: what the user chose, or auto-detected by the model; once the first stretch reads as Arabic, lock it for the rest
+      let lang: string | undefined = WHISPER_LANG[p0.language] ?? (p0.language in WHISPER_LANG ? undefined : "arabic");
       for (const [s, e] of picks) {
         const pcm = await audio.pcm(s, e);
         let segs;
         try {
-          segs = await transcribe(pcm, s, (stage, f) => report(stage === "model" ? "model" : "transcribe", stage === "model" ? 0.15 + 0.05 * f : 0.2 + 0.6 * ((done + f * (e - s)) / total)));
+          segs = await transcribe(pcm, s, (stage, f) => report(stage === "model" ? "model" : "transcribe", stage === "model" ? 0.15 + 0.05 * f : 0.2 + 0.6 * ((done + f * (e - s)) / total)), lang);
         } catch (err) {
           throw new Fail("ASR_FAILED", `تعذّر تشغيل تفريغ الكلام في هذا المتصفح (${err instanceof Error ? err.message : err}). جرّب Chrome أو Edge حديث، أو أرفق ملف ترجمة SRT.`, `Speech recognition could not run in this browser (${err instanceof Error ? err.message : err}). Try a recent Chrome or Edge, or attach an SRT file.`);
         }
         done += e - s;
+        if (lang === undefined && segs.length && rtlShare(segs.map((x) => x.text).join(" ")) > 0.7) lang = "arabic";
         segments.push(...segs);
         spans.push(segs.flatMap((x) => x.words));
         report("transcribe", 0.2 + 0.6 * (done / total));
@@ -187,7 +191,7 @@ export function createLocalBackend(): Backend {
     if (v) closeVideo(v);
     for (const k of [...urls.keys()]) if (k.startsWith(`thumb:${pid}:`)) { URL.revokeObjectURL(urls.get(k)!); urls.delete(k); }
 
-    const transcript: Transcript = { language: "ar", engine, segments: segments.sort((a, b) => a.start - b.start).map((s, i) => ({ id: i, start: s.start, end: s.end, text: s.text, words: s.words })) };
+    const transcript: Transcript = { language: isRtl(segments.map((x) => x.text).join(" ")) ? "ar" : (p0.language !== "auto" && p0.language !== "ar" ? p0.language : "en"), engine, segments: segments.sort((a, b) => a.start - b.start).map((s, i) => ({ id: i, start: s.start, end: s.end, text: s.text, words: s.words })) };
     await idbPut(`sug:${pid}`, sug);
     await idbPut(`tr:${pid}`, transcript);
     const d = load(); const p = projectOf(d, pid);

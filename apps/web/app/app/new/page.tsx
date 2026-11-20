@@ -28,6 +28,7 @@ export default function NewProject() {
   const backend = useBackend();
   const router = useRouter();
   const [name, setName] = useState("");
+  const [lang, setLang] = useState("auto");
   const [source, setSource] = useState<"file" | "url">("file");
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState("");
@@ -67,7 +68,7 @@ export default function NewProject() {
     let hasSource = false;
     try {
       const fallback = source === "url" ? (locale === "ar" ? "فيديو من رابط" : "Video from link") : file?.name || "مشروع";
-      const p = await backend.createProject(name.trim() || fallback, "ar");
+      const p = await backend.createProject(name.trim() || fallback, lang);
       createdId = p.id;
       if (source === "url") {
         const job = await backend.importUrl(p.id, url.trim());
@@ -111,6 +112,13 @@ export default function NewProject() {
           <p className="small muted" style={{ margin: 0 }}>{t(local ? "url_local_note" : "url_hint")}</p>
         </div>
       )}
+      <label className="field">{t("lang_label")}
+        <select className="input" value={lang} onChange={(e) => setLang(e.target.value)} disabled={busy} data-testid="lang">
+          <option value="auto">{t("lang_auto")}</option><option value="ar">العربية</option><option value="en">English</option><option value="fr">Français</option>
+          <option value="es">Español</option><option value="tr">Türkçe</option><option value="ur">اردو</option><option value="hi">हिन्दी</option><option value="id">Bahasa Indonesia</option>
+        </select>
+        <span className="small muted" style={{ fontWeight: 400 }}>{t("lang_note")}</span>
+      </label>
       {local && source === "file" && <p className="small muted" style={{ margin: 0 }} data-testid="upload-first">{t("upload_first")}</p>}
       {local && phone && <div className="note" role="note" data-testid="phone-note">{t("phone_note")}</div>}
       {local && source === "file" && (

@@ -130,7 +130,7 @@ function clean(chunks: { timestamp: [number, number | null]; text: string }[], o
 }
 
 /** Transcribe `pcm` (16 kHz mono) whose first sample is at `offset` seconds in the source. */
-export async function transcribe(pcm: Float32Array, offset: number, onProgress: Progress, language = "arabic"): Promise<AsrSegment[]> {
+export async function transcribe(pcm: Float32Array, offset: number, onProgress: Progress, language?: string): Promise<AsrSegment[]> {
   if (typeof window !== "undefined" && window.__CLIPARAB_ASR__) return window.__CLIPARAB_ASR__(pcm, offset);
   ready ??= load(onProgress).catch((e) => { ready = null; throw e; });
   const w = await ready;

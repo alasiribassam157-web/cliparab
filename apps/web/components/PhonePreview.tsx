@@ -95,7 +95,7 @@ export function PhonePreview({ src, es, words, aspect }: Props) {
           </div>
         )}
         {active && (
-          <div className={`cap ${pos}`} style={{ fontSize: `calc(${fs} / 1080 * 100cqw)`, color: baseColor, ...(cap.box ? { background: "rgba(0,0,0,.55)", borderRadius: "0.3em", padding: "0.1em 0.3em" } : {}) }} dir="rtl" data-testid="caption">
+          <div className={`cap ${pos}`} style={{ fontSize: `calc(${fs} / 1080 * 100cqw)`, color: baseColor, ...(cap.box ? { background: "rgba(0,0,0,.55)", borderRadius: "0.3em", padding: "0.1em 0.3em" } : {}) }} dir={active.lines.flat().some((x) => /[\u0600-\u06FF]/.test(x.w.text)) ? "rtl" : "ltr"} data-testid="caption">
             {active.lines.map((line, i) => (
               <span className="line" key={i}>
                 {line.map((x, j) => (

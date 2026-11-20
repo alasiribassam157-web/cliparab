@@ -3,6 +3,7 @@
  * layouts, Arabic captions with karaoke highlight) and records canvas + audio with MediaRecorder.
  * It runs in real time (a 30 s clip takes about 30 s) and needs the tab to stay visible.
  */
+import { isRtl } from "./dir";
 import { captionAt, chunkWords } from "../captions";
 import type { EditState, WordT } from "../types";
 import { drawCover, openVideo, seek } from "./vision";
@@ -26,8 +27,9 @@ function drawCaptions(ctx: CanvasRenderingContext2D, W: number, H: number, es: E
   const fs = ((cap.font_size ?? 74) / 1080) * W;
   const lh = fs * 1.25;
   ctx.font = `800 ${fs}px ${family}`;
-  ctx.direction = "rtl";
-  ctx.textAlign = "right";
+  const rtl = isRtl(active.lines.flat().map((x) => x.w.text).join(" "));
+  ctx.direction = rtl ? "rtl" : "ltr";
+  ctx.textAlign = rtl ? "right" : "left";
   ctx.textBaseline = "middle";
   ctx.lineJoin = "round";
   const pos = cap.position ?? "bottom";
@@ -41,7 +43,7 @@ function drawCaptions(ctx: CanvasRenderingContext2D, W: number, H: number, es: E
       ctx.fillStyle = "rgba(0,0,0,.55)";
       ctx.fillRect(W / 2 - total / 2 - fs * 0.3, y - lh / 2, total + fs * 0.6, lh);
     }
-    let xr = W / 2 + total / 2; // first word is the right-most one in Arabic
+    let xr = rtl ? W / 2 + total / 2 : W / 2 - total / 2; // first word: right-most in Arabic, left-most in English
     line.forEach((x, i) => {
       const color = (active.mode === "karaoke" && x.spoken) || x.emphasis ? cap.highlight ?? "#FFD21F" : cap.color ?? "#FFFFFF";
       ctx.lineWidth = fs * 0.14;
@@ -49,7 +51,7 @@ function drawCaptions(ctx: CanvasRenderingContext2D, W: number, H: number, es: E
       ctx.strokeText(x.w.text, xr, y);
       ctx.fillStyle = color;
       ctx.fillText(x.w.text, xr, y);
-      xr -= widths[i] + space;
+      xr += (rtl ? -1 : 1) * (widths[i] + space);
     });
     y += lh;
   }
