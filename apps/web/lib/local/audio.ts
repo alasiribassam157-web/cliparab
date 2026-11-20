@@ -62,6 +62,53 @@ function parseEsds(v: DataView, s: number, e: number): Uint8Array | null {
   return null;
 }
 
+/** Collect one track's samples from every moof/traf/trun in a fragmented MP4. */
+async function readFragments(file: Blob, trackId: number, trexDur: number, trexSize: number, timescale: number) {
+  const sizes: number[] = [], offsets: number[] = [], times: number[] = [];
+  let pos = 0, t = 0;
+  while (pos + 8 <= file.size) {
+    const h = await readBytes(file, pos, 16);
+    let size = h.getUint32(0);
+    const type = String.fromCharCode(h.getUint8(4), h.getUint8(5), h.getUint8(6), h.getUint8(7));
+    if (size === 1) size = Number(h.getBigUint64(8)); else if (size === 0) size = file.size - pos;
+    if (size < 8) break;
+    if (type === "moof" && size < 64 * 1024 * 1024) {
+      const m = await readBytes(file, pos, size);
+      for (const traf of children(m, 8, m.byteLength).get("traf") ?? []) {
+        const tc = children(m, traf.s, traf.e);
+        const tfhd = first(tc, "tfhd");
+        if (!tfhd || m.getUint32(tfhd.s + 4) !== trackId) continue;
+        const tf = m.getUint32(tfhd.s) & 0xffffff;
+        let q = tfhd.s + 8, base = pos, dDur = trexDur, dSize = trexSize;
+        if (tf & 0x1) { base = Number(m.getBigUint64(q)); q += 8; }
+        if (tf & 0x2) q += 4;
+        if (tf & 0x8) { dDur = m.getUint32(q); q += 4; }
+        if (tf & 0x10) { dSize = m.getUint32(q); q += 4; }
+        const tfdt = first(tc, "tfdt");
+        if (tfdt) t = m.getUint8(tfdt.s) === 1 ? Number(m.getBigUint64(tfdt.s + 4)) : m.getUint32(tfdt.s + 4);
+        for (const trun of tc.get("trun") ?? []) {
+          const rf = m.getUint32(trun.s) & 0xffffff;
+          const n = m.getUint32(trun.s + 4);
+          let r = trun.s + 8, off = base;
+          if (rf & 0x1) { off = base + m.getInt32(r); r += 4; }
+          if (rf & 0x4) r += 4;
+          for (let i = 0; i < n; i++) {
+            let dur = dDur, sz = dSize;
+            if (rf & 0x100) { dur = m.getUint32(r); r += 4; }
+            if (rf & 0x200) { sz = m.getUint32(r); r += 4; }
+            if (rf & 0x400) r += 4;
+            if (rf & 0x800) r += 4;
+            sizes.push(sz); offsets.push(off); times.push(t / timescale);
+            off += sz; t += dur;
+          }
+        }
+      }
+    }
+    pos += size;
+  }
+  return { sizes: Uint32Array.from(sizes), offsets: Float64Array.from(offsets), times: Float64Array.from(times), duration: t / timescale };
+}
+
 async function parseMp4(file: Blob): Promise<Track | null> {
   const moov = await findTopBox(file, "moov");
   if (!moov || moov.size > 400 * 1024 * 1024) return null;
@@ -98,7 +145,20 @@ async function parseMp4(file: Blob): Promise<Track | null> {
 
     // sample sizes
     const stsz = first(st, "stsz"); const stco = first(st, "stco") ?? first(st, "co64"); const stsc = first(st, "stsc"); const stts = first(st, "stts");
-    if (!stsz || !stco || !stsc || !stts) return null;
+    const fragmentedTrack = async () => {
+      // fragmented MP4 (screen recorders, OBS, browser recordings, some downloaders): samples live in moof/traf/trun
+      const tkhd = first(tk, "tkhd");
+      if (!tkhd) return null;
+      const trackId = v.getUint32(tkhd.s + (v.getUint8(tkhd.s) === 1 ? 20 : 12));
+      let defDur = 0, defSize = 0;
+      const mvex = first(top, "mvex");
+      for (const trex of mvex ? children(v, mvex.s, mvex.e).get("trex") ?? [] : []) {
+        if (v.getUint32(trex.s + 4) === trackId) { defDur = v.getUint32(trex.s + 12); defSize = v.getUint32(trex.s + 16); }
+      }
+      const fr = await readFragments(file, trackId, defDur, defSize, timescale);
+      return fr.sizes.length ? { timescale, sampleRate, channels, asc, codec, ...fr } : null;
+    };
+    if (!stsz || !stco || !stsc || !stts || v.getUint32(stsz.s + 8) === 0) return fragmentedTrack();
     const fixed = v.getUint32(stsz.s + 4); const count = v.getUint32(stsz.s + 8);
     const sizes = new Uint32Array(count);
     for (let i = 0; i < count; i++) sizes[i] = fixed || v.getUint32(stsz.s + 12 + 4 * i);
@@ -237,8 +297,8 @@ class DecodedAudio implements AudioSource {
 
 export class AudioUnsupported extends Error {}
 
-export async function openAudio(file: Blob): Promise<AudioSource> {
-  if (typeof AudioDecoder !== "undefined") {
+export async function openAudio(file: Blob, forceDecode = false): Promise<AudioSource> {
+  if (!forceDecode && typeof AudioDecoder !== "undefined") {
     const tr = await parseMp4(file).catch(() => null);
     if (tr) {
       const ok = await AudioDecoder.isConfigSupported({ codec: tr.codec, sampleRate: tr.sampleRate, numberOfChannels: tr.channels, description: tr.asc }).catch(() => ({ supported: false }));

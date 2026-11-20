@@ -108,6 +108,12 @@ export function createLocalBackend(): Backend {
     try {
       audio = await openAudio(file);
       env = await audio.envelopeDb((f) => report("probe", 0.02 + 0.13 * f));
+      // safety net: if the fast MP4 reader produced nothing or silence, let the browser decode the file itself
+      if ((!env.length || env.reduce((a, x) => Math.max(a, x), -200) < -70) && file.size < 450 * 1024 * 1024) {
+        console.warn("[cliparab] fast audio reader returned silence; retrying with decodeAudioData");
+        audio = await openAudio(file, true);
+        env = await audio.envelopeDb();
+      }
     } catch (e) {
       if (!(e instanceof AudioUnsupported)) console.warn("[cliparab] audio", e);
     }
