@@ -6,15 +6,39 @@
 interface FaceDetectorLike { detect(src: CanvasImageSource): Promise<{ boundingBox: DOMRectReadOnly }[]> }
 declare global { interface Window { FaceDetector?: new (o?: { fastMode?: boolean; maxDetectedFaces?: number }) => FaceDetectorLike } }
 
+/** Rejects if `p` takes longer than `ms` (iOS Safari can leave media promises pending forever). */
+export function within<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((ok, err) => {
+    const t = setTimeout(() => err(new Error("timeout")), ms);
+    p.then((x) => { clearTimeout(t); ok(x); }, (e) => { clearTimeout(t); err(e); });
+  });
+}
+
 export async function openVideo(url: string): Promise<HTMLVideoElement> {
   const v = document.createElement("video");
-  v.muted = true; v.playsInline = true; v.preload = "auto"; v.crossOrigin = "anonymous";
+  v.muted = true; v.defaultMuted = true; v.playsInline = true; v.preload = "auto"; v.crossOrigin = "anonymous";
+  v.setAttribute("playsinline", ""); v.setAttribute("muted", "");
+  // iOS Safari does not load media for a detached element: keep it in the page, invisible
+  v.style.cssText = "position:fixed;left:-9999px;top:0;width:2px;height:2px;opacity:0;pointer-events:none";
+  document.body.appendChild(v);
   v.src = url;
-  await new Promise<void>((ok, err) => {
-    v.addEventListener("loadeddata", () => ok(), { once: true });
-    v.addEventListener("error", () => err(new Error("video-decode")), { once: true });
-  });
+  v.load();
+  try {
+    await within(new Promise<void>((ok, err) => {
+      const ready = () => { if (v.readyState >= 2) ok(); };
+      v.addEventListener("loadeddata", ready, { once: true });
+      v.addEventListener("canplay", ready, { once: true });
+      v.addEventListener("error", () => err(new Error("video-decode")), { once: true });
+      // iOS only starts decoding after a play(): a muted inline play-then-pause is allowed
+      setTimeout(() => { if (v.readyState < 2) v.play().then(() => v.pause()).catch(() => undefined); }, 1200);
+      ready();
+    }), 9000);
+  } catch (e) { closeVideo(v); throw e; }
   return v;
+}
+
+export function closeVideo(v: HTMLVideoElement) {
+  try { v.pause(); URL.revokeObjectURL(v.src); v.removeAttribute("src"); v.load(); v.remove(); } catch { /* ignore */ }
 }
 
 export function seek(v: HTMLVideoElement, t: number): Promise<void> {

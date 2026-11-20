@@ -9,7 +9,7 @@ import { parseSubtitles, suggestClips, type Word } from "./engine";
 import { idbClear, idbDel, idbDelPrefix, idbGet, idbPut } from "./idb";
 import { renderClip } from "./render";
 import { holdScreen } from "./wakelock";
-import { bestFrame, openVideo, thumbnail } from "./vision";
+import { bestFrame, closeVideo, openVideo, thumbnail, within } from "./vision";
 
 const KEY = "cliparab.local.v1";
 // Seconds of speech we transcribe at most; long videos get their most promising stretches only, so the wait
@@ -159,10 +159,14 @@ export function createLocalBackend(): Backend {
 
     // 4) best frame + subject centre per clip, visual score, thumbnails
     report("preview", 0.88);
-    const v = await openVideo(URL.createObjectURL(file)).catch(() => null);
+    let v: HTMLVideoElement | null = await openVideo(URL.createObjectURL(file)).catch(() => null);
     const frames: { t: number; cx: number; center: number; quality: number }[] = [];
     for (let i = 0; i < sug.length; i++) {
-      frames.push(v ? await bestFrame(v, sug[i].start, sug[i].end).catch(() => ({ t: (sug[i].start + sug[i].end) / 2, cx: 0.5, center: 0.5, quality: 0.6 })) : { t: (sug[i].start + sug[i].end) / 2, cx: 0.5, center: 0.5, quality: 0.6 });
+      const dflt = { t: (sug[i].start + sug[i].end) / 2, cx: 0.5, center: 0.5, quality: 0.6 };
+      // a browser that cannot seek this file (some phones) must not hold the analysis hostage: after one stall, skip the frame work
+      let fr = dflt;
+      if (v) { try { fr = await within(bestFrame(v, sug[i].start, sug[i].end), 12000); } catch { if (!v.videoWidth || i === 0) { closeVideo(v); v = null; } } }
+      frames.push(fr);
       report("preview", 0.88 + 0.06 * ((i + 1) / sug.length));
     }
     sug = sug.map((s, i) => ({ ...s, center: frames[i].center, scores: { ...s.scores, visual: Math.round(frames[i].quality * 1000) / 1000 },
@@ -174,12 +178,13 @@ export function createLocalBackend(): Backend {
       const f = (sug[i] as LocalSuggestion & { _f: { t: number; cx: number } })._f;
       delete (sug[i] as Partial<LocalSuggestion & { _f: unknown }>)._f;
       if (v) {
-        const blob = await thumbnail(v, f.t, f.cx).catch(() => null);
+        const blob = await within(thumbnail(v, f.t, f.cx), 8000).catch(() => null);
         if (blob) await idbPut(`thumb:${pid}:${sug[i].id}`, blob);
+        else if (i === 0) { closeVideo(v); v = null; }
       }
       report("preview", 0.94 + 0.05 * ((i + 1) / sug.length));
     }
-    if (v) { URL.revokeObjectURL(v.src); v.removeAttribute("src"); v.load(); }
+    if (v) closeVideo(v);
     for (const k of [...urls.keys()]) if (k.startsWith(`thumb:${pid}:`)) { URL.revokeObjectURL(urls.get(k)!); urls.delete(k); }
 
     const transcript: Transcript = { language: "ar", engine, segments: segments.sort((a, b) => a.start - b.start).map((s, i) => ({ id: i, start: s.start, end: s.end, text: s.text, words: s.words })) };
@@ -423,10 +428,10 @@ export async function createSampleProject(backend: Backend): Promise<string> {
     try {
       const v = await openVideo(sc.source.preview_url);
       for (const s of sc.suggestions) {
-        const blob = await thumbnail(v, s.start + (s.end - s.start) * 0.4, s.center ?? 0.5).catch(() => null);
+        const blob = await within(thumbnail(v, s.start + (s.end - s.start) * 0.4, s.center ?? 0.5), 8000).catch(() => null);
         if (blob) { await idbPut(`thumb:${p.id}:${s.id}`, blob); window.dispatchEvent(new CustomEvent("cliparab:thumbs", { detail: p.id })); }
       }
-      v.removeAttribute("src"); v.load();
+      closeVideo(v);
     } catch { /* thumbnails are optional */ }
   })();
   return p.id;
