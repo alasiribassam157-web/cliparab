@@ -11,7 +11,7 @@ import { useUser } from "@/lib/user";
 
 const STAGES = ["probe", "transcribe", "segment", "score", "preview"] as const;
 
-function ClipCard({ s, pid, onEdit, busy }: { s: Suggestion; pid: string; onEdit: (s: Suggestion) => void; busy: boolean }) {
+function ClipCard({ s, pid, onEdit, busy, top }: { s: Suggestion; pid: string; onEdit: (s: Suggestion) => void; busy: boolean; top?: boolean }) {
   const { t } = useI18n();
   const backend = useBackend();
   const [why, setWhy] = useState(false);
@@ -30,7 +30,8 @@ function ClipCard({ s, pid, onEdit, busy }: { s: Suggestion; pid: string; onEdit
   }, [preview, s.start, s.end]);
 
   return (
-    <article className="card clip-card" data-testid="clip-card">
+    <article className={`card clip-card${top ? " top-pick" : ""}`} data-testid="clip-card">
+      {top && <span className="top-badge">★ {t("top_pick")}</span>}
       <div className="clip-thumb" aria-hidden={!thumbOk}>
         {thumbOk && backend.thumbUrl(pid, s.id) ? (
           <img src={backend.thumbUrl(pid, s.id)} alt={s.title} loading="lazy" onError={() => setThumbOk(false)} />
@@ -77,6 +78,8 @@ export default function ProjectPage() {
   const [showText, setShowText] = useState(false);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [typeF, setTypeF] = useState("all");
+  const [sort, setSort] = useState<"score" | "time">("score");
 
   // thumbnails that are drawn after the page opened (sample project) show up as they land
   useEffect(() => {
@@ -151,6 +154,7 @@ export default function ProjectPage() {
       <div className="row spread">
         <div>
           <h1 style={{ margin: 0 }}>{project.name}</h1>
+          {(project.language === "en" || project.language === "ar") && <span className="chip" style={{ marginInlineStart: 8 }}>{project.language === "en" ? "English" : "العربية"}</span>}
           <span className="muted small">{project.source ? `${project.source.filename} · ${fmtDuration(project.source.duration)}` : ""}</span>
         </div>
         <div className="row">{statusChip(project.status, t)}<button className="btn danger sm" onClick={remove}>{t("delete_project")}</button></div>
@@ -186,8 +190,18 @@ export default function ProjectPage() {
               {transcript.segments.map((s) => <div key={s.id}><span className="muted" dir="ltr">{fmtTime(s.start)}</span> {s.text}</div>)}
             </div>
           )}
+          {items.length > 1 && (
+            <div className="filterbar" role="group" aria-label={t("filter_all")}>
+              <button type="button" className="chip preset" aria-pressed={typeF === "all"} onClick={() => setTypeF("all")}>{t("filter_all")} · {items.length}</button>
+              {[...new Set(items.map((x) => x.clip_type))].map((k) => (
+                <button key={k} type="button" className="chip preset" aria-pressed={typeF === k} onClick={() => setTypeF(k)}>{t("type_" + k)} · {items.filter((x) => x.clip_type === k).length}</button>
+              ))}
+              <span className="grow" />
+              <button type="button" className="chip preset" onClick={() => setSort(sort === "score" ? "time" : "score")}>{sort === "score" ? t("sort_score") : t("sort_time")} ⇅</button>
+            </div>
+          )}
           <div className="stack">
-            {items.map((s) => <ClipCard key={s.id} s={s} pid={id} onEdit={edit} busy={busy} />)}
+            {items.filter((x) => typeF === "all" || x.clip_type === typeF).sort((a, b) => (sort === "score" ? b.total - a.total : a.start - b.start)).map((s) => <ClipCard key={s.id} s={s} pid={id} onEdit={edit} busy={busy} top={s.rank === 1} />)}
           </div>
         </>
       )}

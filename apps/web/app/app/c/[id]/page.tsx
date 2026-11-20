@@ -11,6 +11,14 @@ import { useI18n } from "@/lib/i18n";
 import { ApiException, type Clip, type EditState, type ExportItem, type Project, type Transcript, type WordT } from "@/lib/types";
 
 type Tab = "trim" | "layout" | "captions" | "text" | "export";
+const PRESETS: { k: string; ar: string; en: string; c: Partial<import("@/lib/types").CaptionStyleT> }[] = [
+  { k: "hormozi", ar: "الأكثر انتشارًا", en: "Viral", c: { mode: "karaoke", color: "#FFFFFF", highlight: "#FFD21F", box: false, font_size: 84, position: "bottom" } },
+  { k: "neon", ar: "نيون", en: "Neon", c: { mode: "karaoke", color: "#FFFFFF", highlight: "#22D3EE", box: false, font_size: 78, position: "bottom" } },
+  { k: "lime", ar: "ليموني", en: "Lime", c: { mode: "karaoke", color: "#FFFFFF", highlight: "#A3E635", box: false, font_size: 82, position: "middle" } },
+  { k: "pop", ar: "كلمة بكلمة", en: "Word pop", c: { mode: "pop", color: "#FFFFFF", highlight: "#F472B6", box: false, font_size: 96, position: "middle" } },
+  { k: "clean", ar: "نظيف", en: "Clean", c: { mode: "plain", color: "#FFFFFF", highlight: "#FFD21F", box: true, font_size: 64, position: "bottom" } },
+  { k: "cinema", ar: "سينمائي", en: "Cinema", c: { mode: "plain", color: "#F5E9C8", highlight: "#F5E9C8", box: false, font_size: 60, position: "bottom" } },
+];
 const COLORS = ["#FFD21F", "#22D3EE", "#34D399", "#F472B6", "#FFFFFF"];
 
 function Seg<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
@@ -182,6 +190,12 @@ export default function Editor() {
         {tab === "captions" && (
           <div className="stack">
             <label className="row"><input type="checkbox" checked={es.captions} onChange={(e) => update({ captions: e.target.checked })} />{t("cap_on")}</label>
+            <b>{t("cap_presets")}</b>
+            <div className="presets" role="group">
+              {PRESETS.map((p) => <button key={p.k} type="button" className="chip preset" onClick={() => update({ caption: p.c })}>{locale === "ar" ? p.ar : p.en}</button>)}
+            </div>
+            <label className="row"><input type="checkbox" checked={es.hook !== false} onChange={(e) => update({ hook: e.target.checked })} />{t("hook_on")}</label>
+            {es.hook !== false && <input className="input" value={String(es.hook_text ?? "")} maxLength={90} placeholder={t("hook_ph")} onChange={(e) => update({ hook_text: e.target.value })} aria-label={t("hook_on")} />}
             <b>{t("cap_mode")}</b>
             <Seg value={cap.mode ?? "karaoke"} onChange={(v) => update({ caption: { mode: v } })} options={[["karaoke", t("cap_karaoke")], ["plain", t("cap_plain")], ["pop", t("cap_pop")]]} />
             <b>{t("cap_pos")}</b>
@@ -197,7 +211,7 @@ export default function Editor() {
           <div className="stack">
             <Seg value={textMode} onChange={setTextMode} options={[["emph", t("ed_emph")], ["edit", t("transcript")]]} />
             <span className="muted small">{textMode === "emph" ? t("emphasis_hint") : t("edit_words_hint")}</span>
-            <div className="words" dir="rtl">
+            <div className="words" dir={/[\u0600-\u06FF]/.test(baseWords.map((w) => w.text).join("")) ? "rtl" : "ltr"}>
               {baseWords.map((w, i) => textMode === "emph"
                 ? <button key={i} className="word" aria-pressed={isEmphasis(w.text, cap.emphasis ?? [])} onClick={() => toggleEmphasis(w)}>{w.text}</button>
                 : <input key={i} value={w.text} size={Math.max(3, w.text.length)} onChange={(e) => editWord(i, e.target.value)} aria-label={`word ${i + 1}`} />)}

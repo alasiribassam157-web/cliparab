@@ -340,3 +340,13 @@ section > h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); }
 .hero .eyebrow { border-radius: 4px; letter-spacing: .3px; }
 .marquee span { border-radius: 4px; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; letter-spacing: .5px; }
 .hero h1 { letter-spacing: -1px; }
+
+/* v5: presets, filters, hook banner, top pick */
+.presets, .filterbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip.preset { cursor: pointer; border: 1px solid var(--border); padding: 7px 14px; font-size: .85rem; transition: transform .15s, border-color .15s, background .15s; min-height: 36px; }
+.chip.preset:hover { transform: translateY(-2px); border-color: var(--primary); color: var(--text); }
+.chip.preset[aria-pressed="true"] { background: var(--grad); color: var(--primary-ink); border-color: transparent; }
+.hook-ban { position: absolute; top: 8%; inset-inline: 7%; margin-inline: auto; width: fit-content; max-width: 86%; padding: .35em .75em; border-radius: 8px; background: var(--grad); color: #031014; font-weight: 800; text-align: center; line-height: 1.3; font-size: calc(62 / 1080 * 100cqw); animation: hookIn .35s cubic-bezier(.2,.8,.2,1) both; box-shadow: 0 8px 24px -8px rgba(34, 211, 238, .6); z-index: 3; }
+@keyframes hookIn { from { opacity: 0; transform: translateY(-10px) scale(.96); } }
+.clip-card.top-pick { border-color: color-mix(in srgb, var(--accent) 60%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent), 0 20px 50px -20px rgba(163, 230, 53, .35); }
+.top-badge { position: absolute; top: 0; inset-inline-end: 0; padding: 4px 12px; font-size: .75rem; font-weight: 800; background: var(--grad); color: var(--primary-ink); border-bottom-left-radius: 8px; z-index: 2; }

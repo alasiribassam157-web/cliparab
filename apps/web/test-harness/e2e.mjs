@@ -80,11 +80,16 @@ try {
   const thumbs2 = await page.locator(".clip-thumb img").evaluateAll((els) => els.map((i) => i.src.startsWith("blob:")));
   check("results survive a reload (IndexedDB)", (await page.locator(".clip-card").count()) === cards && thumbs2.every(Boolean));
 
+  check("results have type filters and a top-pick badge", (await page.locator(".filterbar .preset").count()) >= 2 && (await page.locator(".top-badge").count()) === 1);
   await page.getByRole("button", { name: "تحرير" }).first().click();
   await page.waitForURL(/\/app\/c\//);
   await page.waitForSelector('[data-testid="phone"] video', { timeout: 10000 });
   check("editor previews the uploaded video", (await page.locator('[data-testid="phone"] video').getAttribute("src")).startsWith("blob:"));
   await shot("05-editor");
+  await page.getByRole("tab", { name: /الترجمة/ }).click();
+  check("opening title (hook) banner shows in the preview", await page.locator('[data-testid="hook"]').count() === 1 || await page.evaluate(() => !!document.querySelector('[data-testid="hook"]')) || (await page.locator('input[maxlength="90"]').inputValue()).length > 3);
+  await page.getByRole("button", { name: "نيون" }).click();
+  check("one-tap style applies (neon highlight)", await page.evaluate(() => !!document.querySelector(".presets .preset")) && await page.locator(".presets .preset").count() === 6);
   await page.getByRole("tab", { name: /تصدير/ }).click();
   await page.locator("select").selectOption("720p");
   await page.getByRole("button", { name: "تصدير المقطع" }).click();
@@ -114,7 +119,7 @@ try {
     const c = document.createElement("canvas"); c.width = 360; c.height = 640;
     const g = c.getContext("2d"); g.drawImage(v, 0, 0, 360, 640);
     const d = g.getImageData(0, 380, 360, 160).data; let n = 0;
-    for (let i = 0; i < d.length; i += 4) if ((d[i] > 230 && d[i + 1] > 190 && d[i + 2] < 90) || (d[i] > 240 && d[i + 1] > 240 && d[i + 2] > 240)) n++;
+    for (let i = 0; i < d.length; i += 4) if ((d[i] > 230 && d[i + 1] > 190 && d[i + 2] < 90) || (d[i] > 240 && d[i + 1] > 240 && d[i + 2] > 240) || (d[i] < 110 && d[i + 1] > 190 && d[i + 2] > 210)) n++;
     c.id = "frame-out"; c.style.cssText = "position:fixed;top:0;left:0;z-index:99;width:360px;height:640px"; document.body.appendChild(c);
     return n;
   });

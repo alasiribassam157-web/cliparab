@@ -323,7 +323,7 @@ export function createLocalBackend(): Backend {
       const s = sug.find((x) => x.id === suggestionId);
       if (!s) throw notFound();
       const es: EditState = { start: s.start, end: s.end, layout: "fill", reframe_mode: "auto", manual_center: s.center ?? 0.5, auto_center: s.center ?? 0.5, captions: true,
-        caption: { mode: "karaoke", position: "bottom", emphasis: s.emphasis }, words: null, resolution: "1080p", loudnorm: true };
+        caption: { mode: "karaoke", position: "bottom", emphasis: s.emphasis }, words: null, resolution: "1080p", loudnorm: true, hook: true, hook_text: s.title.replace(/…$/, "") };
       const d = load(); projectOf(d, pid);
       const clip: Clip = { id: uid("lc_"), project_id: pid, suggestion_id: suggestionId, title: s.title, edit_state: es, version: 1 };
       d.clips.push(clip); save(d); return clip;

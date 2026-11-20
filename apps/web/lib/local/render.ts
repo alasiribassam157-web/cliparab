@@ -4,6 +4,7 @@
  * It runs in real time (a 30 s clip takes about 30 s) and needs the tab to stay visible.
  */
 import { isRtl } from "./dir";
+import { closeVideo } from "./vision";
 import { captionAt, chunkWords } from "../captions";
 import type { EditState, WordT } from "../types";
 import { drawCover, openVideo, seek } from "./vision";
@@ -55,6 +56,37 @@ function drawCaptions(ctx: CanvasRenderingContext2D, W: number, H: number, es: E
     });
     y += lh;
   }
+}
+
+/** Opening title banner (the hook): fades in over the first moments of the clip. */
+function drawHook(ctx: CanvasRenderingContext2D, W: number, H: number, es: EditState, t: number, family: string) {
+  const text = String(es.hook_text ?? "").replace(/…$/, "").trim();
+  const el = t - es.start, D = 2.8;
+  if (es.hook === false || !text || el < 0 || el > D) return;
+  const a = Math.max(0, Math.min(1, el / 0.25, (D - el) / 0.35));
+  const fs = W * 0.062, lh = fs * 1.3, maxW = W * 0.84;
+  ctx.save();
+  ctx.globalAlpha = a;
+  ctx.font = `800 ${fs}px ${family}`;
+  const rtl = isRtl(text);
+  ctx.direction = rtl ? "rtl" : "ltr"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  const lines: string[] = []; let cur = "";
+  for (const w of text.split(/\s+/)) {
+    const tryLine = cur ? `${cur} ${w}` : w;
+    if (cur && ctx.measureText(tryLine).width > maxW && lines.length < 2) { lines.push(cur); cur = w; } else cur = tryLine;
+  }
+  if (cur) lines.push(cur);
+  const bw = Math.min(maxW + fs, Math.max(...lines.map((l) => ctx.measureText(l).width)) + fs * 1.2), bh = lines.length * lh + fs * 0.7;
+  const x = (W - bw) / 2, y = H * 0.08 + (1 - a) * -H * 0.02;
+  const g = ctx.createLinearGradient(x, y, x + bw, y + bh);
+  g.addColorStop(0, "#22d3ee"); g.addColorStop(1, "#a3e635");
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") ctx.roundRect(x, y, bw, bh, fs * 0.28); else ctx.rect(x, y, bw, bh);
+  ctx.fill();
+  ctx.fillStyle = "#031014";
+  lines.forEach((l, i) => ctx.fillText(l, W / 2, y + fs * 0.35 + lh * (i + 0.5)));
+  ctx.restore();
 }
 
 function drawFrame(ctx: CanvasRenderingContext2D, v: HTMLVideoElement, W: number, H: number, es: EditState) {
@@ -138,6 +170,7 @@ export async function renderClip(src: string, es: EditState, words: WordT[], onP
     }
     drawFrame(ctx, v, W, H, es);
     if (events.length) drawCaptions(ctx, W, H, es, events, v.currentTime, family);
+    drawHook(ctx, W, H, es, v.currentTime, family);
     onProgress(Math.min(0.99, (v.currentTime - es.start) / dur));
     if (v.currentTime >= es.end || v.ended) { finish(); return; }
     raf = requestAnimationFrame(tick);
@@ -150,7 +183,7 @@ export async function renderClip(src: string, es: EditState, words: WordT[], onP
   await stopped;
   clearInterval(guard);
   void actx.close();
-  v.removeAttribute("src"); v.load();
+  closeVideo(v);
   onProgress(1);
   return { blob: new Blob(parts, { type: mime.split(";")[0] }), mime: mime.split(";")[0], duration: dur };
 }

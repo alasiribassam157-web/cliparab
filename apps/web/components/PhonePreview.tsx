@@ -107,6 +107,9 @@ export function PhonePreview({ src, es, words, aspect }: Props) {
             ))}
           </div>
         )}
+        {es.hook !== false && !!es.hook_text && time - es.start < 2.8 && time >= es.start - 0.05 && (
+          <div className="hook-ban" dir={/[\u0600-\u06FF]/.test(String(es.hook_text)) ? "rtl" : "ltr"} data-testid="hook">{String(es.hook_text).replace(/…$/, "")}</div>
+        )}
         <div className="safe" aria-hidden />
       </div>
       <div className="transport">
