@@ -1,3 +1,4 @@
+@font-face { font-family: "Aref Ruqaa"; src: url("/fonts/ArefRuqaa-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
 /* ClipArab identity v3 "Neon": near-black + cyan / lime, sharp corners, grid. Dark by default. */
 :root {
   --bg: #05090d; --surface: #0a1318; --surface-2: #11202a; --text: #eafcff; --muted: #82a6b1; --border: #16363f;
@@ -328,12 +329,12 @@ section > h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); }
   .marquee { margin-top: 20px; }
 }
 
-/* v3 logo */
-.logo-mark { background: none !important; box-shadow: none !important; animation: none !important; width: 32px; height: 32px; border-radius: 0; display: block; filter: drop-shadow(0 4px 12px rgba(34, 211, 238, .55)); transition: transform .3s cubic-bezier(.2,.8,.2,1); }
-.logo-mark svg { width: 100%; height: 100%; display: block; }
+/* v4 logo: Arabic ruqaa wordmark "كليب عرب" + ك mark */
+.logo { gap: 10px; }
+.logo-mark { background: var(--grad) !important; box-shadow: 0 6px 18px -6px rgba(34, 211, 238, .7) !important; animation: none !important; filter: none; width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; color: #031014; font-family: "Aref Ruqaa", serif; font-weight: 700; font-size: 1.7rem; line-height: 1; padding-bottom: 5px; transition: transform .3s cubic-bezier(.2,.8,.2,1); }
 .logo:hover .logo-mark { transform: rotate(-6deg) scale(1.08); }
-.logo-word { font-weight: 800; letter-spacing: 2.5px; font-size: 1.05rem; direction: ltr; }
-.logo-word b { font-weight: 800; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.logo-word { font-family: "Aref Ruqaa", var(--font); font-weight: 700; font-size: 1.6rem; line-height: 1.1; letter-spacing: 0; direction: rtl; white-space: nowrap; padding-bottom: 3px; }
+.logo-word b { font-weight: 700; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .card, .note, .drop, .input, select.input, textarea.input, .clip-thumb, .phone, .tabs .tab, .progress, .meter { border-radius: 8px; }
 .phone { border-radius: 22px; }
 .hero .eyebrow { border-radius: 4px; letter-spacing: .3px; }
